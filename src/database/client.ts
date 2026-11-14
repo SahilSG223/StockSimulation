@@ -1,15 +1,8 @@
-/**
- * Mongo client stub — implement on the second laptop (see docs/MONGO_SECOND_LAPTOP.md).
- *
- * Intended shape after `pnpm add mongodb`:
- *   import { MongoClient, Db } from "mongodb";
- *   export async function getDb(): Promise<Db>
- */
+import { MongoClient, type Db } from "mongodb";
 
-export type DbHandle = {
-  /** Placeholder until mongodb driver is wired. */
-  ready: false;
-};
+export type DbHandle = Db;
+
+let clientPromise: Promise<MongoClient> | undefined;
 
 export async function getDb(): Promise<DbHandle> {
   const uri = process.env.MONGODB_URI?.trim();
@@ -17,9 +10,9 @@ export async function getDb(): Promise<DbHandle> {
   if (!uri) {
     throw new Error("Missing MONGODB_URI — set it in .env (never commit it)");
   }
-  // Second laptop: replace with MongoClient.connect(uri) → client.db(dbName)
-  void dbName;
-  throw new Error(
-    "getDb() not implemented — follow docs/MONGO_SECOND_LAPTOP.md on feat/memory-mongo",
-  );
+  if (!clientPromise) {
+    clientPromise = new MongoClient(uri).connect();
+  }
+  const client = await clientPromise;
+  return client.db(dbName);
 }

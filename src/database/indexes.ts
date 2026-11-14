@@ -1,8 +1,6 @@
-/**
- * Ensure indexes for memory collections.
- * Second laptop: implement using Db from mongodb driver + COLLECTIONS.
- */
+/** Ensure indexes for memory collections. */
 
+import type { Db } from "mongodb";
 import { COLLECTIONS } from "./collections.js";
 
 export const EXPERIENCE_INDEXES = [
@@ -16,11 +14,7 @@ export const MEMORY_INDEXES = [
 ] as const;
 
 /** Call once at app startup or via `pnpm exec tsx scripts/ensure-indexes.ts`. */
-export async function ensureMemoryIndexes(_db: unknown): Promise<void> {
-  void COLLECTIONS;
-  void EXPERIENCE_INDEXES;
-  void MEMORY_INDEXES;
-  throw new Error(
-    "ensureMemoryIndexes() not implemented — see docs/MONGO_SECOND_LAPTOP.md",
-  );
+export async function ensureMemoryIndexes(db: Db): Promise<void> {
+  await db.collection(COLLECTIONS.experiences).createIndexes([...EXPERIENCE_INDEXES]);
+  await db.collection(COLLECTIONS.memories).createIndexes([...MEMORY_INDEXES]);
 }
