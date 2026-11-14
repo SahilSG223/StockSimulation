@@ -3,6 +3,10 @@
  * Never log secret values.
  */
 
+import { loadEnvFile } from "./config/load-env.js";
+
+loadEnvFile();
+
 function required(name: string): string {
   const v = process.env[name]?.trim();
   if (!v) throw new Error(`Missing required env: ${name}`);

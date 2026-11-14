@@ -40,3 +40,21 @@ export {
   type RetrievalContext,
   // AgentId is identical to experiences' and already exported above.
 } from "./governance/index.js";
+export {
+  DEFAULT_EMBEDDING_WEIGHTS,
+  EMBEDDING_3_SMALL_DIMS,
+  FakeEmbedder,
+  MemoryIndex,
+  OpenAIEmbedder,
+  consolidateExperienceToMemory,
+  cosineSimilarity,
+  embedMemoryContent,
+  rankWithEmbeddings,
+  type EmbeddedMemory,
+  type Embedder,
+  type EmbeddingRankWeights,
+  type OpenAIEmbedderOptions,
+  type RankedEmbeddedMemory,
+  type RetrievalContext as EmbeddingRetrievalContext,
+  type UpsertMemoryInput,
+} from "./embeddings/index.js";
