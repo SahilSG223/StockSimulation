@@ -1,4 +1,5 @@
 export { DEFAULT_ASSETS, assetsBySymbol } from "./assets.js";
+export { planChaos, type ChaosPlanEntry, type ChaosPlanResult, type ChaosScenarioId, type PlanChaosInput } from "./chaos-director.js";
 export { SimulationClock } from "./clock.js";
 export { EventScheduler, toPublicInfo } from "./event-scheduler.js";
 export { executeOrder } from "./execution-engine.js";
