@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildReplay, runOne, replaySchema, MEMORY_MODES } from "../../src/evaluation/index.js";
 
-const SEED = 31;
+const SEED = 97; // the demo seed (REPLAY_SEED in src/evaluation/replay.ts)
 const SCENARIO = "regime_reversal" as const;
 
 describe("replay contract (Memory Arena viewer)", () => {

@@ -53,11 +53,14 @@ per-tick `frames`, each with every agent's authoritative snapshot (portfolio,
 status, retrieved memories, counterfactual, and an optional trade `interaction`),
 plus per-run `summary` metrics and the regime/event timeline.
 
-Current demo: `regime_reversal`, **seed 31**, 100 ticks. Seed 31 (not the sim's
-older seed 42, which stopped tripping governance after a trajectory change) is
-where governed memory visibly earns its keep: ~13 lesson invalidations, stale
-influence well below raw, equity at or above raw. The seed lives in
-`src/evaluation/replay.ts`; re-scan if `SIMULATION_VERSION` changes.
+Current demo: `regime_reversal`, **seed 97**, 100 ticks. With the shared regime
+estimate (#23), governed memory mostly works by *filtering* stale lessons out
+before they fire, so few seeds show invalidations: in a scan of seeds 1–100, 18
+trip any, and only 97 and 76 combine ≥5 invalidations with governed equity at or
+above raw and lower stale influence. Seed 97: 6 invalidations, mean equity
+105,013 vs raw 104,280, stale influence 0.26 vs 0.89. It is a chosen seed, not a
+typical one; quote `src/evaluation/out/report.md` for averages. The seed lives in
+`src/evaluation/replay.ts`; re-scan if `SIMULATION_VERSION` or governance changes.
 
 ## Not this
 
