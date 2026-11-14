@@ -1,4 +1,5 @@
 export { cosineSimilarity } from "./cosine.js";
+export { embedMemoryContent } from "./embed-memory.js";
 export {
   EMBEDDING_3_SMALL_DIMS,
   OpenAIEmbedder,
