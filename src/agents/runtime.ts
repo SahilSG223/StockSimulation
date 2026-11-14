@@ -3,6 +3,7 @@ import type { ExecutionResult, PortfolioSnapshot } from "../simulation/types.js"
 import { decisionSchema, type AgentDecision } from "./decision-schema.js";
 import { observationSchema, type AgentObservation } from "./observation-schema.js";
 import type { RetrievedMemory } from "./retrieved-memory.js";
+import type { PublicMarketObservation } from "../market/market-feed.js";
 
 export interface DecisionContext {
   observation: AgentObservation;
@@ -64,6 +65,8 @@ export class AgentRuntime {
       agentId: string;
       simulation: Pick<MarketEngine, "observe" | "getPortfolio" | "submitOrder">;
       decide: DecisionProvider;
+      /** Public feature feed; the engine's true regime is never forwarded. */
+      observeMarket?: () => PublicMarketObservation;
       /** When set, memories are retrieved before `decide` and citations are validated. */
       retrieveMemories?: MemoryRetriever;
     },
@@ -76,9 +79,12 @@ export class AgentRuntime {
     this.running = true;
     try {
       const { agentId, simulation, decide, retrieveMemories } = this.options;
-      const market = simulation.observe();
+      const market = this.options.observeMarket?.() ?? simulation.observe();
       const observation = observationSchema.parse({
         tick: market.tick,
+        ...("regimeEstimate" in market && market.regimeEstimate !== undefined
+          ? { regimeEstimate: market.regimeEstimate }
+          : {}),
         prices: market.prices,
         events: market.events,
         portfolio: simulation.getPortfolio(agentId),

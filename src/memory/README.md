@@ -78,6 +78,50 @@ from another run is not penalised for age.
 
 ## The agent run (`pnpm agents`)
 
+### Duration, agents, scheduling, and cost
+
+Defaults: `AGENT_TICKS=50`, `AGENT_SEED=42`, `AGENT_SCENARIO=shock_mid`, and all
+seven archetypes. `AGENT_TICKS` counts total market ticks. The first 20 ticks are
+market-only warm-up: no LLM decisions, experience writes, or lesson consolidation.
+Decisions run at ticks 20 through 49 by default. Therefore the default call budget
+is **7 × (50 − 20) = 210 decision requests**, plus embeddings and any backfill.
+The `run_plan` line prints the selected agents, schedule, and expected decision
+call count before external connections or model requests.
+
+Set `AGENTS=momentum,contrarian` to select a subset. Empty, unknown, or duplicate
+agent names are rejected. CLI options override environment values:
+
+```powershell
+# Inspect the plan and budget without OpenAI or MongoDB calls
+pnpm agents --dry-run --ticks 40 --agents momentum,contrarian --scenario shock_mid --seed 42
+
+# Live demo: 2 agents × 20 decision ticks = 40 calls, plus embeddings
+$env:AGENT_RUN_LABEL = "demo"
+pnpm ensure-indexes
+pnpm memory:prepare
+pnpm agents --ticks 40 --agents momentum,contrarian --scenario shock_mid
+```
+
+Environment equivalents are `AGENT_TICKS`, `AGENTS`, `AGENT_SCENARIO`, and
+`AGENT_SEED`. Scenarios are `stable`, `shock_mid`, and `whipsaw`. Run length must
+include the full selected shock schedule and a decision after its last event ends;
+the error reports the minimum for the selected seed/scenario.
+
+Chaos Director ticks are shifted by 20 ticks and events rebuilt through
+`createShock`, keeping canonical ids consistent with the shifted schedule.
+`shock_mid` schedules a chip-export ban at tick 23–27 (seed 42: tick 26), with a
+bear-regime transition at that tick. `whipsaw` schedules crash, AI-demand spike,
+and chip-export ban, with high-volatility, bull, and bear transitions. `stable`
+is an explicit control with no shocks or regime transitions. These changes are
+local to the agent runner; default engine trajectories are unchanged.
+
+The simulation record includes total ticks, warm-up, decision ticks, expected
+calls, chaos scenario, offset, full plan, event definitions, and regime schedule.
+Each decision and lesson receives the public `MarketFeed.regimeEstimate`, never
+the true regime. The first decision occurs only after the estimate exists. The
+live outcome-scoring and invalidation logic merged on main is retained unchanged;
+this configuration feature does not change its governance rules.
+
 1. Writes one run record (seed, market config and regime params, event
    schedule, `SIMULATION_VERSION`, models, prompt version, memory config) to
    `COLLECTIONS.simulations` and logs it.
@@ -98,8 +142,8 @@ from another run is not penalised for age.
 6. Scores every lesson the decision cited (`scoreLessonOutcome`, same rule as
    `EvalMemoryStore.recordOutcome`): a win reinforces reliability, a loss
    decays it, and consecutive losses while a fast observed-only regime label
-   (`quickRegimeLabel` — the calibrated estimator needs 21 prices, more than a
-   short run has) mismatches the lesson's learned regime invalidate it with a
+   (`quickRegimeLabel`, retained from the existing live governance path) mismatches
+   the lesson's learned regime invalidate it with a
    reason (`invalidationReason`, `MongoMemoryIndex.invalidate`).
 7. Logs one `llm_call` line per model call (provider, model, latency, token
    usage, outcome).
