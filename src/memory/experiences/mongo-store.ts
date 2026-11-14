@@ -44,26 +44,30 @@ export class MongoExperienceStore {
     return record;
   }
 
-  async get(id: ExperienceId): Promise<ExperienceRecord | undefined> {
-    const doc = await this.collection.findOne({ _id: id } as Filter<ExperienceDoc>);
+  /** Owner is part of the filter: another agent's id returns undefined. */
+  async get(id: ExperienceId, agentId: AgentId): Promise<ExperienceRecord | undefined> {
+    const doc = await this.collection.findOne({ _id: id, agentId } as Filter<ExperienceDoc>);
     return doc ? stripMongoId(doc) : undefined;
   }
 
-  async getMany(ids: readonly ExperienceId[]): Promise<ExperienceRecord[]> {
+  /** Owner-scoped; keeps the requested id order and skips misses. */
+  async getMany(ids: readonly ExperienceId[], agentId: AgentId): Promise<ExperienceRecord[]> {
+    if (ids.length === 0) return [];
     const docs = await this.collection
-      .find({ _id: { $in: [...ids] } } as Filter<ExperienceDoc>)
+      .find({ _id: { $in: [...ids] }, agentId } as Filter<ExperienceDoc>)
       .toArray();
-    return docs.map(stripMongoId);
+    const byId = new Map(docs.map((doc) => [doc._id, stripMongoId(doc)]));
+    return ids.flatMap((id) => {
+      const record = byId.get(id);
+      return record ? [record] : [];
+    });
   }
 
   listForAgent(agentId: AgentId): Promise<ExperienceRecord[]> {
     return this.query({ agentId });
   }
 
-  listForAgentInSimulation(
-    agentId: AgentId,
-    simulationId: string,
-  ): Promise<ExperienceRecord[]> {
+  listForAgentInSimulation(agentId: AgentId, simulationId: string): Promise<ExperienceRecord[]> {
     return this.query({ agentId, simulationId });
   }
 

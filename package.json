@@ -9,6 +9,9 @@
     "node": ">=20"
   },
   "scripts": {
+    "memory:prepare": "tsx src/memory/prepare.ts",
+    "memory:check": "tsx src/memory/check.ts",
+    "agents": "tsx src/agents/run.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src tests",
     "format": "prettier --write \"src/**/*.{ts,js}\" \"tests/**/*.{ts,js}\" \"*.config.js\" \"package.json\"",

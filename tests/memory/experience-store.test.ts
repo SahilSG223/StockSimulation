@@ -3,8 +3,7 @@ import { ExperienceStore } from "../../src/memory/experiences/index.js";
 import type { CreateExperienceInput } from "../../src/memory/experiences/index.js";
 
 function baseInput(
-  overrides: Partial<CreateExperienceInput> &
-    Pick<CreateExperienceInput, "agentId" | "tick">,
+  overrides: Partial<CreateExperienceInput> & Pick<CreateExperienceInput, "agentId" | "tick">,
 ): CreateExperienceInput {
   return {
     simulationId: "sim-1",
@@ -94,9 +93,17 @@ describe("ExperienceStore", () => {
     const store = new ExperienceStore();
     const a = store.create(baseInput({ agentId: "a1", tick: 1, id: "exp-a" }));
     const b = store.create(baseInput({ agentId: "a1", tick: 2, id: "exp-b" }));
-    expect(store.getMany(["exp-b", "missing", "exp-a"]).map((e) => e.id)).toEqual([
+    expect(store.getMany(["exp-b", "missing", "exp-a"], "a1").map((e) => e.id)).toEqual([
       b.id,
       a.id,
     ]);
+  });
+
+  it("get / getMany never return another agent's experience", () => {
+    const store = new ExperienceStore();
+    store.create(baseInput({ agentId: "a1", tick: 1, id: "private" }));
+    expect(store.get("private", "a1")?.id).toBe("private");
+    expect(store.get("private", "a2")).toBeUndefined();
+    expect(store.getMany(["private"], "a2")).toEqual([]);
   });
 });

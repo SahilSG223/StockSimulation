@@ -11,6 +11,9 @@
 
 ## Prompts
 
+- Use OpenAI exclusively for agent decisions and embeddings. Configure models
+  with `AGENT_MODEL` / `EMBEDDING_MODEL` and authenticate with `OPENAI_API_KEY`.
+
 - **SYSTEM = instructions**, **USER = data**. Never put untrusted/user/market
   text into the system prompt (prompt-injection risk).
 - Prefer native structured output validated with Zod over free-form JSON parsing.
@@ -24,6 +27,10 @@ order, retrieve memory). Tools with lasting side effects must go through that
 interface — not ad-hoc Mongo writes from the model.
 
 ## Archetypes are starting points
+
+- All seven trading archetypes use LLM decisions by default, configured by
+  `AGENT_MODEL`. Deterministic providers are explicit evaluation baselines and
+  may supply suggestions; they must not silently replace failed LLM calls.
 
 Momentum / contrarian / conservative / aggressive / adaptive are **initial
 configs**. Agents should be able to change behavior when experiences justify it.

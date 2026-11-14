@@ -2,6 +2,7 @@ import type { ExecutionResult } from "../../simulation/types.js";
 import type { ExperienceStore } from "./store.js";
 import type {
   AgentId,
+  CreateExperienceInput,
   ExperienceDecision,
   ExperienceFill,
   ExperienceMarketContext,
@@ -14,7 +15,9 @@ import type {
 export type SectorLookup = ReadonlyMap<string, string> | ((symbol: string) => string | undefined);
 
 export type RecordTradeExperienceInput = {
-  store: ExperienceStore;
+  store: {
+    create(input: CreateExperienceInput): ExperienceRecord | Promise<ExperienceRecord>;
+  };
   agentId: AgentId;
   simulationId: string;
   tick: number;
@@ -47,7 +50,15 @@ function summarizeOutcome(fills: ExperienceFill[], rejections: ExperienceRejecti
  * Turn a decision + authoritative execution results into one episodic experience.
  * Does not invent PnL — only records what the engine returned.
  */
-export function recordTradeExperience(input: RecordTradeExperienceInput): ExperienceRecord {
+export function recordTradeExperience(
+  input: RecordTradeExperienceInput & { store: Pick<ExperienceStore, "create"> },
+): ExperienceRecord;
+export function recordTradeExperience(
+  input: RecordTradeExperienceInput,
+): ExperienceRecord | Promise<ExperienceRecord>;
+export function recordTradeExperience(
+  input: RecordTradeExperienceInput,
+): ExperienceRecord | Promise<ExperienceRecord> {
   const fills: ExperienceFill[] = [];
   const rejections: ExperienceRejection[] = [];
   let cashDelta = 0;
@@ -106,9 +117,7 @@ export function recordTradeExperience(input: RecordTradeExperienceInput): Experi
     fills,
     rejections,
     cashDelta,
-    ...(input.realizedPnlDelta !== undefined
-      ? { realizedPnlDelta: input.realizedPnlDelta }
-      : {}),
+    ...(input.realizedPnlDelta !== undefined ? { realizedPnlDelta: input.realizedPnlDelta } : {}),
     summary: summarizeOutcome(fills, rejections),
   };
 
