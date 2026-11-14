@@ -22,6 +22,12 @@ Given identical inputs, random seed, and initial state, the engine must produce
 the same market trajectory and execution results. Seeded PRNG only — no
 `Math.random()` without a seed path.
 
+Any change that alters trajectories or fills for the same seed and config bumps
+`SIMULATION_VERSION` (`src/simulation/version.ts`) and updates the expected
+values in `tests/simulation/golden-trajectory.test.ts` in the same commit. The
+golden test is the gate; a failing golden test is never "fixed" by updating
+numbers alone.
+
 Every experiment records: seed, initial state, event sequence, market params,
 agent/model/prompt versions, memory config, simulation version.
 

@@ -7,6 +7,7 @@ export {
   REGIME_IDS,
   REGIME_PARAMS,
   SeededRng,
+  SIMULATION_VERSION,
   SimulationClock,
 } from "./simulation/index.js";
 export type {
