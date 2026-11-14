@@ -47,7 +47,7 @@ export function readAgentRunPlan(
     },
   });
   const options = runOptionsSchema.parse({
-    ticks: values.ticks ?? env.AGENT_TICKS ?? "50",
+    ticks: values.ticks ?? env.AGENT_TICKS ?? "27",
     seed: values.seed ?? env.AGENT_SEED ?? "42",
     scenario: values.scenario ?? env.AGENT_SCENARIO ?? "shock_mid",
     agents: (values.agents ?? env.AGENTS ?? archetypes.join(",")).split(",").map((id) => id.trim()),
@@ -55,13 +55,22 @@ export function readAgentRunPlan(
   });
   const { plan } = planChaos({ seed: options.seed, scenarioId: options.scenario });
   // Rebuild through createShock so canonical event ids match the shifted ticks.
-  const chaosPlan = plan.map((entry) => ({ ...entry, tick: entry.tick + AGENT_WARMUP_TICKS }));
+  // Start after one decision, preserving the director's spacing between shocks.
+  const chaosOffsetTicks = plan.length
+    ? AGENT_WARMUP_TICKS + 1 - plan[0]!.tick
+    : AGENT_WARMUP_TICKS;
+  const chaosPlan = plan.map((entry) => ({ ...entry, tick: entry.tick + chaosOffsetTicks }));
   const events = chaosPlan.map(({ preset, tick }) => createShock(preset, { tick }));
   const lastShockEnd = Math.max(
     AGENT_WARMUP_TICKS,
     ...events.map((event) => event.tick + event.duration),
   );
-  if (options.ticks <= lastShockEnd) {
+  // Defaults fit every scenario; explicit durations must still cover all events.
+  const ticks =
+    values.ticks === undefined && env.AGENT_TICKS === undefined
+      ? Math.max(options.ticks, lastShockEnd + 1)
+      : options.ticks;
+  if (ticks <= lastShockEnd) {
     throw new Error(
       `AGENT_TICKS must be at least ${lastShockEnd + 1} for ${options.scenario}, including a decision after the last shock ends`,
     );
@@ -73,10 +82,11 @@ export function readAgentRunPlan(
   }));
   return {
     ...options,
+    ticks,
     warmupTicks: AGENT_WARMUP_TICKS,
-    decisionTicks: options.ticks - AGENT_WARMUP_TICKS,
-    expectedDecisionCalls: options.agents.length * (options.ticks - AGENT_WARMUP_TICKS),
-    chaosOffsetTicks: AGENT_WARMUP_TICKS,
+    decisionTicks: ticks - AGENT_WARMUP_TICKS,
+    expectedDecisionCalls: options.agents.length * (ticks - AGENT_WARMUP_TICKS),
+    chaosOffsetTicks,
     chaosPlan,
     events,
     regimeChanges,

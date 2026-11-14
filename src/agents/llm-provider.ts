@@ -2,11 +2,10 @@ import { readFileSync } from "node:fs";
 import OpenAI from "openai";
 import { getOpenAIApiKey } from "../config.js";
 import { ARCHETYPES, createArchetypeProvider, type Archetype } from "./archetypes.js";
-import { decisionSchema } from "./decision-schema.js";
-import { llmDecisionJsonSchema, openAiDecisionResponseSchema } from "./llm-schema.js";
+import { decisionSchemasForSymbols, openAiDecisionResponseSchema } from "./llm-schema.js";
 import type { DecisionProvider } from "./runtime.js";
 
-export const AGENT_PROMPT_VERSION = "llm-agent-v5";
+export const AGENT_PROMPT_VERSION = "llm-agent-v6";
 
 const REQUEST_TIMEOUT_MS = 60_000;
 /** Upper bound on retrieved memories sent to the model (prompt size and attention). */
@@ -66,6 +65,8 @@ export function createLlmProvider(options: {
   ].join("\n\n");
 
   return async (context) => {
+    const availableSymbols = Object.keys(context.observation.prices);
+    const { jsonSchema, schema } = decisionSchemasForSymbols(availableSymbols);
     // Fail closed before the model call rather than truncating silently.
     if ((context.memories?.length ?? 0) > MAX_MEMORIES_IN_PROMPT) {
       throw new Error(
@@ -74,6 +75,7 @@ export function createLlmProvider(options: {
     }
     const user = JSON.stringify({
       ...context,
+      availableSymbols,
       baselineSuggestion: await baseline(structuredClone(context)),
     });
     const started = Date.now();
@@ -102,7 +104,7 @@ export function createLlmProvider(options: {
             json_schema: {
               name: "agent_decision",
               strict: true,
-              schema: llmDecisionJsonSchema as unknown as Record<string, unknown>,
+              schema: jsonSchema,
             },
           },
         },
@@ -135,7 +137,7 @@ export function createLlmProvider(options: {
       if (choice.finish_reason !== "stop" || choice.message.refusal || !choice.message.content) {
         throw new Error("missing complete decision");
       }
-      const decision = decisionSchema.parse(JSON.parse(choice.message.content));
+      const decision = schema.parse(JSON.parse(choice.message.content));
       report({ outcome: "ok", ...tokens });
       return decision;
     } catch {
