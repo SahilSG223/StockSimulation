@@ -16,8 +16,7 @@ export type UpsertMemoryInput = {
 
 /**
  * In-memory vector index for semantic memories.
- * Laptop-2 follow-up: persist via MongoMemoryRepository / Atlas Vector Search —
- * keep this call shape (upsert / search / invalidate with agentId).
+ * Persistent twin: `MongoMemoryIndex` (feat/memory-mongo-index-wire — laptop 2).
  */
 export class MemoryIndex {
   private readonly byId = new Map<string, EmbeddedMemory>();

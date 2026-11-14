@@ -1,8 +1,13 @@
 export { consolidateExperienceToMemory } from "./consolidate.js";
 export { cosineSimilarity } from "./cosine.js";
 export { embedMemoryContent } from "./embed-memory.js";
+export {
+  toEmbeddedMemory,
+  toMemoryDoc,
+} from "./embedded-memory-mapper.js";
 export { FakeEmbedder } from "./fake-embedder.js";
 export { MemoryIndex, type UpsertMemoryInput } from "./memory-index.js";
+export { MongoMemoryIndex } from "./mongo-memory-index.js";
 export {
   EMBEDDING_3_SMALL_DIMS,
   OpenAIEmbedder,
