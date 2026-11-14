@@ -19,3 +19,13 @@ export type {
   RegimeId,
   SimulationConfig,
 } from "./simulation/index.js";
+
+export {
+  ExperienceStore,
+  marketContextFromObservation,
+  recordTradeExperience,
+} from "./memory/index.js";
+export type {
+  ExperienceQuery,
+  ExperienceRecord,
+} from "./memory/index.js";
