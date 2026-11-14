@@ -48,8 +48,11 @@ export type DecisionContext = {
   history: ReadonlyMap<string, readonly number[]>;
   portfolio: PortfolioSnapshot;
   sectorOf: (symbol: string) => string | undefined;
-  /** Regime inferred from visible prices — never the engine's ground-truth label. */
-  regimeEstimate: string;
+  /**
+   * Regime inferred from visible prices (src/market estimateRegime) — never the
+   * engine's ground-truth label. Undefined until there is enough history.
+   */
+  regimeEstimate: string | undefined;
   /** Retrieved memories for this decision; `[]` means memory is withheld. */
   memories: readonly RetrievedMemory[];
 };
