@@ -7,8 +7,9 @@ outdated, irrelevant, or misleading information.
 The simulated financial market is the **environment**, not the product. The
 product is governed memory + the evaluation framework that measures it.
 
-Full product/engineering spec: [`docs/PROJECT_SPEC.md`](docs/PROJECT_SPEC.md).
-Hackathon execution plan (workstreams + phases): [`docs/plan.md`](docs/plan.md).
+Docs (keep it thin): [`docs/PROJECT_SPEC.md`](docs/PROJECT_SPEC.md) ·
+[`docs/plan.md`](docs/plan.md). Put task how-tos in **PR descriptions**, not new
+`.md` files.
 
 ## Quick start
 
@@ -27,7 +28,7 @@ Do not use npm or yarn in this repo.
 | -------------------------- | ------------------------------------------- |
 | `src/`                     | Simulation, agents, memory, evaluation, API |
 | `tests/`                   | Unit + integration tests                    |
-| `docs/`                    | Human product/architecture docs             |
+| `docs/`                    | Spec + plan only                            |
 | `CLAUDE.md` / `AGENTS.md`  | AI assistant index (team-visible)           |
 | `.claude/rules/`           | Prescriptive engineering rules              |
 | `.github/workflows/ci.yml` | PR quality gates                            |

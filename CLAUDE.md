@@ -3,7 +3,8 @@
 AI assistant instructions for this repo. Humans start with `README.md`.
 
 **Stock Simulation**: governed-memory stress lab for autonomous agents in a
-simulated market. Product thesis and roadmap: `docs/PROJECT_SPEC.md`.
+simulated market. Spec: `docs/PROJECT_SPEC.md`. Board: `docs/plan.md`.
+Do not add more markdown docs for task instructions — use the PR body.
 
 ## Rules
 

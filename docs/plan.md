@@ -1,7 +1,7 @@
 # Hackathon Execution Plan
 
-Teammates: follow this, not a re-read of the full spec. Spec detail lives in
-`PROJECT_SPEC.md`, `ARCHITECTURE.md`, `EVALUATION.md`.
+Teammates: follow this, not a re-read of the full spec. Full thesis:
+`PROJECT_SPEC.md`. Lane how-tos go in **PR descriptions**, not new markdown files.
 
 ## Goal / thesis
 
@@ -108,7 +108,7 @@ next decision vs “always trust top-k similarity.”
 
 - [ ] Baselines **A** (no memory), **B** (unrestricted), **C** (governed) on
       identical seed + events
-- [ ] At least scenarios: stable, shock, regime reversal (see `EVALUATION.md`)
+- [ ] At least scenarios: stable, shock, regime reversal (see `PROJECT_SPEC` §8)
 - [ ] Metrics: one financial + one adaptation + one memory-quality signal
 - [ ] Experiment record: seed, configs, model/prompt versions, memory config,
       sim version
@@ -167,7 +167,7 @@ Do **not** spend hackathon time on:
 - Complete market microstructure or HFT
 - General-purpose forecasting models
 - Heavy multi-agent orchestration frameworks
-- Terraform / Helm / multi-service deploy (see `ENGINEERING.md`)
+- Terraform / Helm / multi-service deploy
 
 Ship a thin vertical slice that proves governed memory under stress.
 
@@ -175,8 +175,7 @@ Ship a thin vertical slice that proves governed memory under stress.
 
 - Never commit `.env`, API keys, Mongo URIs with credentials, or key material.
 - Never paste employer / lab internals into this repo (see
-  [`.claude/rules/secrets.md`](../.claude/rules/secrets.md) and
-  [`ENGINEERING.md`](./ENGINEERING.md)).
+  [`.claude/rules/secrets.md`](../.claude/rules/secrets.md)).
 - Share keys out-of-band. If something leaks, rotate — don’t just delete the
   file.
 

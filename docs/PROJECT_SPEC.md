@@ -253,8 +253,6 @@ Indexes on agentId/status, simulationId/tick, symbol/timestamp, etc. Idempotent 
 
 ## 8. Evaluation and Benchmarking
 
-See also `EVALUATION.md`.
-
 Baselines: (A) no memory, (B) unrestricted memory, (C) governed memory.
 
 Scenarios: stable, shock, regime reversal, contradictory evidence, misleading experience, opponent adaptation.

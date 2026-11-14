@@ -19,7 +19,7 @@ This is a hackathon team repo. Do **not** copy:
 
 **Allowed:** paraphrased engineering _principles_ (Zod at edges, deterministic
 simulation, CI quality gates, memory isolation patterns) rewritten in this
-project's voice. See `docs/ENGINEERING.md`.
+project's voice.
 
 ## Sharing keys with teammates
 
