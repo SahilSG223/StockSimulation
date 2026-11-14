@@ -37,3 +37,4 @@ pnpm-debug.log*
 # Local experiment dumps
 tmp/
 .data/
+experiments/out/
