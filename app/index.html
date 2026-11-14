@@ -228,7 +228,7 @@ a{color:#eceef1}a:hover{color:#ffffff}
 const AGENTS = ['momentum','contrarian','conservative','aggressive','adaptive','breakout','dip_buyer'];
 const LABEL = {momentum:'Momentum',contrarian:'Contrarian',conservative:'Conservative',aggressive:'Aggressive',adaptive:'Adaptive',breakout:'Breakout',dip_buyer:'Dip buyer'};
 const HEALTH = {good:[46,196,118], bad:[232,82,82], neutral:[70,138,255]};
-const MODES = [{id:'none',label:'No Memory'},{id:'raw',label:'Raw Memory'},{id:'governed',label:'Governed Memory'}];
+const MODES = [{id:'none',label:'No Memory'},{id:'raw',label:'Raw Memory'},{id:'governed',label:'Governed Memory'},{id:'live',label:'Live Test'}];
 const GAIN = 'oklch(0.80 0.15 150)', LOSS = 'oklch(0.72 0.17 25)', AMBER = 'oklch(0.84 0.12 80)';
 const TICK_MS = 650;
 const money = (v, signed) => (signed && v > 0 ? '+' : v < 0 ? '−' : '') + '$' + Math.abs(v).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
