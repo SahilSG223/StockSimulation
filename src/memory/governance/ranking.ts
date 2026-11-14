@@ -15,6 +15,15 @@ export const DEFAULT_WEIGHTS: RankingWeights = {
   reliability: 1,
 };
 
+/**
+ * Floor applied to semantic/contextual scores before multiplying, so a single
+ * weak-but-plausible signal can't veto an otherwise strong match to a literal
+ * zero (e.g. the placeholder token-overlap semantic score hits 0 whenever the
+ * query is worded differently from the stored content). Reliability is
+ * excluded on purpose: zero reliability should suppress retrieval.
+ */
+const MIN_SIGNAL = 0.05;
+
 /** Simple exponential decay; λ by memory type can come later. */
 export function temporalRelevance(ageTicks: number, lambda = 0.02): number {
   return Math.exp(-lambda * Math.max(0, ageTicks));
@@ -80,8 +89,8 @@ export function rankMemories(args: {
       const contextualApplicabilityScore = contextualApplicability(memory, args.ctx);
       const temporal = temporalRelevance(args.ctx.tick - memory.updatedAtTick);
       const retrievalScore =
-        Math.pow(semanticSimilarity, w.semantic) *
-        Math.pow(contextualApplicabilityScore, w.contextual) *
+        Math.pow(Math.max(MIN_SIGNAL, semanticSimilarity), w.semantic) *
+        Math.pow(Math.max(MIN_SIGNAL, contextualApplicabilityScore), w.contextual) *
         Math.pow(temporal, w.temporal) *
         Math.pow(Math.max(0, memory.reliability), w.reliability);
       return {

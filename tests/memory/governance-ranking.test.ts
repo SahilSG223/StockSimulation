@@ -43,6 +43,34 @@ describe("memory governance ranking", () => {
     expect(ranked[0]?.memory.id).toBe("1");
   });
 
+  it("does not let a zero-overlap semantic score veto an otherwise strong match", () => {
+    const perfectContext = mem({
+      id: "perfect-context",
+      content: "we saw strong gains after the earnings beat",
+      reliability: 0.95,
+      scope: {
+        sectors: ["semiconductors"],
+        regimes: ["bull"],
+        eventTypes: ["positive_ai_demand"],
+        assets: ["SEMI"],
+      },
+    });
+    const ranked = rankMemories({
+      memories: [perfectContext],
+      query: "ai semiconductor demand news",
+      ctx: {
+        agentId: "a1",
+        tick: 0,
+        sectors: ["semiconductors"],
+        regimeEstimate: "bull",
+        eventTypes: ["positive_ai_demand"],
+        assets: ["SEMI"],
+      },
+    });
+    expect(ranked[0]?.semanticSimilarity).toBe(0);
+    expect(ranked[0]?.retrievalScore).toBeGreaterThan(0);
+  });
+
   it("deprioritizes regime mismatch via contextual score", () => {
     const bull = mem({
       id: "bull",
@@ -93,7 +121,7 @@ describe("contradiction handling", () => {
     expect(isRetrievable(result.memory)).toBe(false);
   });
 
-  it("narrows scope when regime differs", () => {
+  it("narrows scope when the contradicted regime isn't even in scope", () => {
     const m = mem({
       id: "1",
       content: "lesson",
@@ -113,5 +141,48 @@ describe("contradiction handling", () => {
     expect(result.action).toBe("narrow_scope");
     expect(result.memory.scope.regimes).toEqual(["bull", "low_vol"]);
     expect(result.memory.reliability).toBeLessThan(m.reliability);
+  });
+
+  it("actually drops the contradicted regime when it is one of several in scope", () => {
+    const m = mem({
+      id: "1",
+      content: "lesson",
+      scope: {
+        sectors: ["semiconductors"],
+        regimes: ["bull", "low_vol"],
+        eventTypes: [],
+        assets: [],
+      },
+    });
+    const result = handleContradiction({
+      memory: m,
+      newRegime: "bull",
+      atTick: 20,
+      reason: "failed under bull",
+    });
+    expect(result.action).toBe("narrow_scope");
+    expect(result.memory.scope.regimes).toEqual(["low_vol"]);
+    expect(result.memory.reliability).toBeLessThan(m.reliability);
+  });
+
+  it("invalidates when narrowing out the contradicted regime would leave nothing", () => {
+    const m = mem({
+      id: "1",
+      content: "lesson",
+      scope: {
+        sectors: ["semiconductors"],
+        regimes: ["bull"],
+        eventTypes: [],
+        assets: [],
+      },
+    });
+    const result = handleContradiction({
+      memory: m,
+      newRegime: "bull",
+      atTick: 20,
+      reason: "failed under bull",
+    });
+    expect(result.action).toBe("invalidate");
+    expect(isRetrievable(result.memory)).toBe(false);
   });
 });
