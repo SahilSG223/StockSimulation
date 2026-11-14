@@ -49,6 +49,9 @@ export async function retrieveForDecision(args: {
     ctx: {
       tick: args.ctx.observation.tick,
       assets: Object.keys(args.ctx.observation.prices),
+      ...(args.ctx.observation.regimeEstimate !== undefined
+        ? { regimeEstimate: args.ctx.observation.regimeEstimate }
+        : {}),
       ...(eventTypes.length > 0 ? { eventTypes } : {}),
     },
     limit: args.limit ?? 5,

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { SECTORS } from "../simulation/types.js";
+import { SECTORS, REGIME_IDS } from "../simulation/types.js";
 
 const positionSchema = z
   .object({
@@ -12,6 +12,7 @@ const positionSchema = z
 export const observationSchema = z
   .object({
     tick: z.number().int().nonnegative(),
+    regimeEstimate: z.enum(REGIME_IDS).optional(),
     prices: z.record(z.string().min(1), z.number().finite().positive()),
     events: z.array(
       z
