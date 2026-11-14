@@ -72,8 +72,17 @@ export class MongoMemoryIndex {
   }
 
   /** Fail closed: throws (via `updateForAgent`) if `id` doesn't belong to `agentId`. */
-  async invalidate(agentId: string, id: string): Promise<EmbeddedMemory | undefined> {
-    await this.repo.updateForAgent(agentId, id, { status: "invalidated" });
+  async invalidate(
+    agentId: string,
+    id: string,
+    reason: string,
+    atTick: number,
+  ): Promise<EmbeddedMemory | undefined> {
+    await this.repo.updateForAgent(agentId, id, {
+      status: "invalidated",
+      invalidationReason: reason,
+      updatedAtTick: atTick,
+    });
     return this.get(agentId, id);
   }
 

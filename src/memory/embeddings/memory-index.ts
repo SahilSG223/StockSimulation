@@ -52,10 +52,10 @@ export class MemoryIndex {
   }
 
   /** Invalidate in-place; keeps vector for audit but drops from retrieval. */
-  invalidate(agentId: string, id: string): EmbeddedMemory | undefined {
+  invalidate(agentId: string, id: string, reason: string, atTick: number): EmbeddedMemory | undefined {
     const m = this.byId.get(id);
     if (!m || m.agentId !== agentId) return undefined;
-    const next = { ...m, status: "invalidated" as const };
+    const next = { ...m, status: "invalidated" as const, invalidationReason: reason, updatedAtTick: atTick };
     this.byId.set(id, next);
     return next;
   }

@@ -10,7 +10,9 @@ import {
   MongoVectorMemory,
   OpenAIEmbedder,
   consolidateExperienceToMemory,
+  quickRegimeLabel,
   recordTradeExperience,
+  scoreLessonOutcome,
 } from "../memory/index.js";
 import { MarketEngine, REGIME_PARAMS, SIMULATION_VERSION } from "../simulation/index.js";
 import { ARCHETYPES, type Archetype } from "./archetypes.js";
@@ -86,6 +88,9 @@ async function main(): Promise<void> {
     .collection<typeof runRecord & { _id: string }>(COLLECTIONS.simulations)
     .insertOne({ _id: simulationId, ...runRecord });
 
+  // Consecutive regime-mismatched losing outcomes per lesson id (same rule as
+  // EvalMemoryStore.recordOutcome, src/evaluation/memory-lab.ts).
+  const lessonLossStreak = new Map<string, number>();
   const agents = [];
   for (const archetype of archetypes) {
     const agentId = agentIds.get(archetype)!;
@@ -147,6 +152,49 @@ async function main(): Promise<void> {
       // Governance can later narrow or invalidate the lesson.
       if (experience.outcome.fills.length > 0) {
         await consolidateExperienceToMemory({ index: lessons, experience });
+      }
+      // Evidence-based governance: score every lesson this decision cited.
+      // The calibrated regime estimator needs 21 prices before it returns
+      // anything (far more than a short run has), so this uses the same
+      // fast, observed-only proxy as the demo runner (quickRegimeLabel).
+      const quickRegime = quickRegimeLabel(feed.observe().features.index.return1);
+      const won = record.portfolioAfter.unrealizedPnl >= 0;
+      for (const memoryId of record.decision.memoryReferences) {
+        const lesson = await lessons.get(agentId, memoryId);
+        if (!lesson || lesson.status !== "active") continue;
+        const outcome = scoreLessonOutcome({
+          reliability: lesson.reliability,
+          scopeRegimes: lesson.scope.regimes,
+          regimeEstimate: quickRegime,
+          won,
+          lossStreak: lessonLossStreak.get(memoryId) ?? 0,
+          atTick: record.observation.tick,
+        });
+        lessonLossStreak.set(memoryId, outcome.lossStreak);
+        if (outcome.action === "invalidate") {
+          await lessons.invalidate(agentId, memoryId, outcome.reason, record.observation.tick);
+        } else {
+          await lessons.upsert({
+            id: memoryId,
+            agentId,
+            content: lesson.content,
+            updatedAtTick: record.observation.tick,
+            reliability: outcome.reliability,
+            embedding: lesson.embedding,
+            scope: lesson.scope,
+          });
+        }
+        console.log(
+          JSON.stringify({
+            type: "governance",
+            simulationId,
+            agentId,
+            memoryId,
+            action: outcome.action,
+            reliability: outcome.reliability,
+            ...(outcome.action === "invalidate" ? { reason: outcome.reason } : {}),
+          }),
+        );
       }
       console.log(JSON.stringify({ type: "cycle", simulationId, ...record }));
     }

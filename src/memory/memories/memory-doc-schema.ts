@@ -22,6 +22,7 @@ export const memoryDocSchema = z
       })
       .strict(),
     status: z.enum(["active", "under_review", "superseded", "invalidated", "expired"]),
+    invalidationReason: z.string().optional(),
     version: z.number().int().positive(),
   })
   .strict();

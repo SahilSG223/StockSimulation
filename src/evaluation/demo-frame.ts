@@ -21,6 +21,8 @@ const memoryFiredSchema = z
     content: z.string(),
     retrievalScore: z.number().finite(),
     status: z.enum(["active", "invalidated", "superseded", "under_review", "expired"]),
+    /** Why the status/reliability last changed — present once governance has acted. */
+    reason: z.string().optional(),
   })
   .strict();
 

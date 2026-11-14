@@ -95,7 +95,13 @@ from another run is not penalised for age.
    (episodic layer). Experiences whose orders filled are consolidated into a
    lesson; holds and rejections stay episodic. Lessons are tagged with the
    inferred `regimeEstimate` from `MarketFeed`, never the engine's true regime.
-6. Logs one `llm_call` line per model call (provider, model, latency, token
+6. Scores every lesson the decision cited (`scoreLessonOutcome`, same rule as
+   `EvalMemoryStore.recordOutcome`): a win reinforces reliability, a loss
+   decays it, and consecutive losses while a fast observed-only regime label
+   (`quickRegimeLabel` — the calibrated estimator needs 21 prices, more than a
+   short run has) mismatches the lesson's learned regime invalidate it with a
+   reason (`invalidationReason`, `MongoMemoryIndex.invalidate`).
+7. Logs one `llm_call` line per model call (provider, model, latency, token
    usage, outcome).
 
 The experience vector search above (`MongoVectorMemory.retrieve`) is not used at

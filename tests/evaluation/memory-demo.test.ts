@@ -30,12 +30,28 @@ describe("runMemoryDemo", () => {
     expect(result.chaosPlan.length).toBeGreaterThan(0);
   });
 
-  it("govern invalidates the stale lesson", async () => {
+  it("govern invalidates the lesson once evidence (losses in a mismatched regime) supports it", async () => {
     const result = await runMemoryDemo({ seed: 42, scenarioId: "shock_mid" });
     const frame = result.frames.find((f) => f.phase === "govern")!;
     expect(frame.memoriesFired).toEqual([
-      { id: "lesson-semi-momentum", content: expect.any(String), retrievalScore: 0, status: "invalidated" },
+      {
+        id: "lesson-semi-momentum",
+        content: expect.any(String),
+        retrievalScore: 0,
+        status: "invalidated",
+        reason: expect.any(String),
+      },
     ]);
+    expect(frame.memoriesFired[0]?.reason).toContain("bull");
+  });
+
+  it("stable scenario: nothing contradicts the lesson, so it stays active and still fires", async () => {
+    const result = await runMemoryDemo({ seed: 42, scenarioId: "stable" });
+    const govern = result.frames.find((f) => f.phase === "govern")!;
+    expect(govern.memoriesFired[0]?.status).toBe("active");
+    const afterGovern = result.frames.find((f) => f.phase === "act_after_govern")!;
+    expect(afterGovern.decision?.memoryReferences).toEqual(["lesson-semi-momentum"]);
+    expect(afterGovern.decision?.orders.length).toBeGreaterThan(0);
   });
 
   it("act_after_govern holds with no memory citations (stale lesson must not fire)", async () => {
