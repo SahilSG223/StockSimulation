@@ -43,7 +43,10 @@ export {
 export {
   DEFAULT_EMBEDDING_WEIGHTS,
   EMBEDDING_3_SMALL_DIMS,
+  FakeEmbedder,
+  MemoryIndex,
   OpenAIEmbedder,
+  consolidateExperienceToMemory,
   cosineSimilarity,
   embedMemoryContent,
   rankWithEmbeddings,
@@ -53,4 +56,5 @@ export {
   type OpenAIEmbedderOptions,
   type RankedEmbeddedMemory,
   type RetrievalContext as EmbeddingRetrievalContext,
+  type UpsertMemoryInput,
 } from "./embeddings/index.js";
