@@ -155,7 +155,19 @@ Execute identical scenarios across agent configs; record performance and behavio
 
 ### 3.6 Frontend / Observability
 
-Expose market performance and memory behavior: live sim, charts, portfolios, trades, decision explanations, retrieved memories, confidence/lifecycle, events/regimes, experiment results. Especially: which memories influenced a decision.
+Expose market performance and memory behavior. **Hackathon MVP** (see
+`docs/UI_PLAYBOOK.md`):
+
+1. Market strip — tick, prices, public chaos/event headlines
+2. Decision panel — reasoning, orders, **which memories fired** (id + text)
+3. Governance strip — lesson lifecycle `active` → `invalidated` after shock
+
+Full wishlist (if time): charts, trades tape, regimes, experiment A/B/C compare,
+optional realtime. Stack intent: Next.js / React. UI **never** invents
+authoritative P&L — render simulation / demo-frame output only.
+
+**Chaos is not a UI concern to invent:** a seeded Chaos Director (simulation /
+evaluation) schedules shocks; the UI displays the plan + public headlines.
 
 ---
 

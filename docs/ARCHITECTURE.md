@@ -40,7 +40,10 @@ Do not mix these:
 3. Agent runtime + decision schemas
 4. Memory store + retrieval + governance
 5. Evaluation baselines & scenarios
-6. Frontend / observability (memory influence on decisions)
+6. Frontend / observability (memory influence on decisions) — see `UI_PLAYBOOK.md`
+
+**Chaos Director** (seeded shock planner) sits in simulation/evaluation — it
+schedules events; it is not an agent. Agents still only submit orders.
 
 Suggested module layout under `src/` matches `PROJECT_SPEC.md` §10.
 
