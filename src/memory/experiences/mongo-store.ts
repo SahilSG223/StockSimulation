@@ -1,72 +1,74 @@
-import { randomUUID } from "node:crypto";
-import { MongoServerError, type Collection, type Filter } from "mongodb";
-import { experienceQuerySchema, experienceRecordSchema } from "./experience-schema.js";
-import type { CreateExperienceInput, ExperienceQuery, ExperienceRecord } from "./types.js";
+/**
+ * Mongo-backed experience store. Mirrors the API of `ExperienceStore` in `./store.ts`.
+ * EVERY query includes agentId in the filter (never post-filter only).
+ */
 
-/** All reads include ownership in the database filter, including id lookups. */
+import type { Collection, Db, Filter } from "mongodb";
+import { COLLECTIONS } from "../../database/collections.js";
+import type {
+  AgentId,
+  CreateExperienceInput,
+  ExperienceId,
+  ExperienceQuery,
+  ExperienceRecord,
+} from "./types.js";
+
+type ExperienceDoc = ExperienceRecord & { _id: ExperienceId };
+
+function stripMongoId(doc: ExperienceDoc): ExperienceRecord {
+  const { _id: _ignored, ...record } = doc;
+  return record;
+}
+
 export class MongoExperienceStore {
-  constructor(private readonly collection: Collection<ExperienceRecord>) {}
+  private readonly collection: Collection<ExperienceDoc>;
 
-  async initialize(): Promise<void> {
-    await this.collection.createIndex({ id: 1 }, { unique: true });
-    await this.collection.createIndex({ agentId: 1, simulationId: 1, tick: -1, id: -1 });
-    await this.collection.createIndex({ agentId: 1, tick: -1, id: -1 });
+  constructor(db: Db) {
+    this.collection = db.collection<ExperienceDoc>(COLLECTIONS.experiences);
   }
 
   async create(input: CreateExperienceInput): Promise<ExperienceRecord> {
-    const record: ExperienceRecord = experienceRecordSchema.parse({
-      ...input,
-      id: input.id ?? randomUUID(),
+    const id = input.id ?? crypto.randomUUID();
+    const record: ExperienceRecord = {
+      id,
+      agentId: input.agentId,
+      simulationId: input.simulationId,
+      tick: input.tick,
+      market: input.market,
+      decision: input.decision,
+      outcome: input.outcome,
+      scope: input.scope,
       createdAtTick: input.tick,
-    });
-    try {
-      // Driver may add _id to its argument; keep that out of the returned record.
-      await this.collection.insertOne(structuredClone(record));
-    } catch (error) {
-      if (error instanceof MongoServerError && error.code === 11000) {
-        throw new Error("Experience already exists");
-      }
-      throw new Error("MongoDB experience write failed");
-    }
+    };
+    await this.collection.insertOne({ ...record, _id: id });
     return record;
   }
 
-  async get(id: string, agentId: string): Promise<ExperienceRecord | undefined> {
-    const rows = await this.getMany([id], agentId);
-    return rows[0];
+  async get(id: ExperienceId): Promise<ExperienceRecord | undefined> {
+    const doc = await this.collection.findOne({ _id: id } as Filter<ExperienceDoc>);
+    return doc ? stripMongoId(doc) : undefined;
   }
 
-  async getMany(ids: readonly string[], agentId: string): Promise<ExperienceRecord[]> {
-    const owner = experienceQuerySchema.parse({ agentId }).agentId;
-    if (ids.length === 0) return [];
-    // Validate ids as strings before building a query to reject operator injection.
-    const validIds = ids.map((id) => experienceRecordSchema.shape.id.parse(id));
-    let docs: unknown[];
-    try {
-      docs = await this.collection.find({ agentId: owner, id: { $in: validIds } }).toArray();
-    } catch {
-      throw new Error("MongoDB experience read failed");
-    }
-    const records = docs.map((doc) => experienceRecordSchema.parse(doc));
-    const byId = new Map(records.map((record) => [record.id, record]));
-    return validIds.flatMap((id) => {
-      const record = byId.get(id);
-      return record ? [record] : [];
-    });
+  async getMany(ids: readonly ExperienceId[]): Promise<ExperienceRecord[]> {
+    const docs = await this.collection
+      .find({ _id: { $in: [...ids] } } as Filter<ExperienceDoc>)
+      .toArray();
+    return docs.map(stripMongoId);
   }
 
-  listForAgent(agentId: string): Promise<ExperienceRecord[]> {
+  listForAgent(agentId: AgentId): Promise<ExperienceRecord[]> {
     return this.query({ agentId });
   }
 
-  listForAgentInSimulation(agentId: string, simulationId: string): Promise<ExperienceRecord[]> {
+  listForAgentInSimulation(
+    agentId: AgentId,
+    simulationId: string,
+  ): Promise<ExperienceRecord[]> {
     return this.query({ agentId, simulationId });
   }
 
-  async query(input: ExperienceQuery): Promise<ExperienceRecord[]> {
-    const q = experienceQuerySchema.parse(input);
-    if (q.limit === 0) return [];
-    const filter: Filter<ExperienceRecord> = { agentId: q.agentId };
+  async query(q: ExperienceQuery): Promise<ExperienceRecord[]> {
+    const filter: Filter<ExperienceDoc> = { agentId: q.agentId };
     if (q.simulationId !== undefined) filter.simulationId = q.simulationId;
     if (q.fromTick !== undefined || q.toTick !== undefined) {
       filter.tick = {
@@ -74,19 +76,21 @@ export class MongoExperienceStore {
         ...(q.toTick !== undefined ? { $lte: q.toTick } : {}),
       };
     }
-    for (const field of ["symbols", "sectors", "regimes", "eventTypes"] as const) {
-      const values = q[field];
-      if (values?.length) filter[`scope.${field}`] = { $in: values };
+    if (q.symbols && q.symbols.length > 0) filter["scope.symbols"] = { $in: [...q.symbols] };
+    if (q.sectors && q.sectors.length > 0) filter["scope.sectors"] = { $in: [...q.sectors] };
+    if (q.regimes && q.regimes.length > 0) filter["scope.regimes"] = { $in: [...q.regimes] };
+    if (q.eventTypes && q.eventTypes.length > 0) {
+      filter["scope.eventTypes"] = { $in: [...q.eventTypes] };
     }
-    let docs: unknown[];
-    try {
-      const cursor = this.collection.find(filter).sort({ tick: -1, id: -1 });
-      if (q.limit !== undefined) cursor.limit(q.limit);
-      docs = await cursor.toArray();
-    } catch {
-      throw new Error("MongoDB experience query failed");
+
+    // Sort descending + limit, then reverse: avoids a count()+skip() race against
+    // concurrent writes, and `limit(0)` naturally means "no limit" (mirrors the
+    // in-memory store's `slice(-0)` == full array quirk for `limit: 0`).
+    const cursor = this.collection.find(filter).sort({ tick: -1, _id: -1 });
+    if (q.limit !== undefined && q.limit >= 0) {
+      cursor.limit(q.limit);
     }
-    // Select the latest N on the server, return chronological order like the baseline store.
-    return docs.map((doc) => experienceRecordSchema.parse(doc)).reverse();
+    const rows = await cursor.toArray();
+    return rows.reverse().map(stripMongoId);
   }
 }

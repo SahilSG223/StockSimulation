@@ -1,0 +1,41 @@
+import type { ExperienceRecord } from "../experiences/types.js";
+import type { MemoryIndex } from "./memory-index.js";
+import type { EmbeddedMemory } from "./types.js";
+
+/**
+ * Naive consolidation: turn one episodic experience into a semantic lesson string,
+ * embed it, and upsert into the vector index. Governance can later invalidate it.
+ */
+export async function consolidateExperienceToMemory(args: {
+  index: MemoryIndex;
+  experience: ExperienceRecord;
+  /** Override auto-generated lesson text. */
+  lesson?: string;
+}): Promise<EmbeddedMemory> {
+  const { experience: exp, index } = args;
+  const lesson =
+    args.lesson ??
+    [
+      `In regime ${exp.market.regime}`,
+      exp.decision.strategy ? `using ${exp.decision.strategy}` : null,
+      `agent decided: ${exp.decision.reasoning}`,
+      `outcome: ${exp.outcome.summary}`,
+      exp.scope.sectors.length ? `sectors: ${exp.scope.sectors.join(", ")}` : null,
+      exp.scope.symbols.length ? `symbols: ${exp.scope.symbols.join(", ")}` : null,
+    ]
+      .filter(Boolean)
+      .join(". ");
+
+  return index.upsert({
+    agentId: exp.agentId,
+    content: lesson,
+    updatedAtTick: exp.tick,
+    reliability: 0.55,
+    scope: {
+      sectors: [...exp.scope.sectors],
+      regimes: [...exp.scope.regimes],
+      eventTypes: [...exp.scope.eventTypes],
+      assets: [...exp.scope.symbols],
+    },
+  });
+}

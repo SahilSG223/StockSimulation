@@ -1,11 +1,7 @@
-/** Memory package — experiences lane (governance is a sibling PR). */
-export { connectMongoMemory } from "./connect.js";
-export { createEmbeddingProvider, type EmbeddingProvider } from "./embedding.js";
-export { MongoVectorMemory } from "./vector-memory.js";
-export { retrievedMemorySchema, type RetrievedMemory } from "./vector-schema.js";
-export { MongoExperienceStore } from "./experiences/mongo-store.js";
+/** Memory package — experiences + governance lanes. */
 export {
   ExperienceStore,
+  MongoExperienceStore,
   marketContextFromObservation,
   recordTradeExperience,
   type AgentId,
@@ -22,3 +18,49 @@ export {
   type RecordTradeExperienceInput,
   type SectorLookup,
 } from "./experiences/index.js";
+export {
+  MongoMemoryRepository,
+  memoryDocSchema,
+  type MemoryDoc,
+} from "./memories/index.js";
+export {
+  DEFAULT_WEIGHTS,
+  contextualApplicability,
+  handleContradiction,
+  invalidateMemory,
+  isRetrievable,
+  rankMemories,
+  roughSemanticSimilarity,
+  supersedeMemory,
+  temporalRelevance,
+  type ContradictionAction,
+  type ContradictionResult,
+  type LifecycleChange,
+  type MemoryId,
+  type MemoryRecord,
+  type MemoryScope,
+  type MemoryStatus,
+  type MemoryType,
+  type RankedMemory,
+  type RankingWeights,
+  type RetrievalContext,
+  // AgentId is identical to experiences' and already exported above.
+} from "./governance/index.js";
+export {
+  DEFAULT_EMBEDDING_WEIGHTS,
+  EMBEDDING_3_SMALL_DIMS,
+  FakeEmbedder,
+  MemoryIndex,
+  OpenAIEmbedder,
+  consolidateExperienceToMemory,
+  cosineSimilarity,
+  embedMemoryContent,
+  rankWithEmbeddings,
+  type EmbeddedMemory,
+  type Embedder,
+  type EmbeddingRankWeights,
+  type OpenAIEmbedderOptions,
+  type RankedEmbeddedMemory,
+  type RetrievalContext as EmbeddingRetrievalContext,
+  type UpsertMemoryInput,
+} from "./embeddings/index.js";

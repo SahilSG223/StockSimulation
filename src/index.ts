@@ -23,7 +23,20 @@ export type {
 
 export {
   ExperienceStore,
+  MongoExperienceStore,
+  MongoMemoryRepository,
   marketContextFromObservation,
   recordTradeExperience,
 } from "./memory/index.js";
-export type { ExperienceQuery, ExperienceRecord } from "./memory/index.js";
+export type {
+  ExperienceQuery,
+  ExperienceRecord,
+  MemoryDoc,
+} from "./memory/index.js";
+
+export {
+  COLLECTIONS,
+  ensureMemoryIndexes,
+  getDb,
+} from "./database/index.js";
+export type { CollectionName, DbHandle } from "./database/index.js";
