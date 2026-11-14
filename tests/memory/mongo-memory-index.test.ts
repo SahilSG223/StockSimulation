@@ -1,5 +1,4 @@
 /** Acceptance tests for the second-laptop MongoMemoryIndex implementation. */
-import type { Db } from "mongodb";
 import { afterAll, describe, expect, it } from "vitest";
 import { getDb } from "../../src/database/client.js";
 import {
@@ -13,37 +12,9 @@ import {
   consolidateExperienceToMemory,
 } from "../../src/memory/embeddings/index.js";
 import { MarketEngine } from "../../src/simulation/index.js";
+import { createFakeDb } from "./fake-mongo-db.js";
 
 const live = process.env.RUN_MONGO_TESTS === "1" && Boolean(process.env.MONGODB_URI);
-
-type FakeDoc = Record<string, unknown> & { _id?: string };
-
-/** Minimal in-memory stand-in for the Mongo methods MongoMemoryRepository calls. */
-function createFakeDb(): Db {
-  const docs: FakeDoc[] = [];
-  const matches = (doc: FakeDoc, filter: FakeDoc) =>
-    Object.entries(filter).every(([k, v]) => doc[k] === v);
-
-  const collection = {
-    async insertOne(doc: FakeDoc) {
-      docs.push({ ...doc });
-      return { insertedId: doc._id };
-    },
-    find(filter: FakeDoc) {
-      return { toArray: async () => docs.filter((d) => matches(d, filter)).map((d) => ({ ...d })) };
-    },
-    async findOne(filter: FakeDoc) {
-      return docs.find((d) => matches(d, filter)) ?? null;
-    },
-    async updateOne(filter: FakeDoc, update: { $set: FakeDoc }) {
-      const doc = docs.find((d) => matches(d, filter));
-      if (!doc) return { matchedCount: 0, modifiedCount: 0 };
-      Object.assign(doc, update.$set);
-      return { matchedCount: 1, modifiedCount: 1 };
-    },
-  };
-  return { collection: () => collection } as unknown as Db;
-}
 
 describe("MongoMemoryIndex (offline)", () => {
   it("upsert writes a MemoryDoc with string _id, agentId, and embedding", async () => {
