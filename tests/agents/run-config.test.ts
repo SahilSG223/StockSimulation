@@ -8,22 +8,34 @@ import { MemoryIndex } from "../../src/memory/embeddings/memory-index.js";
 import { FakeEmbedder } from "../../src/memory/embeddings/fake-embedder.js";
 
 describe("live agent run planning", () => {
-  it("defaults to 50 total ticks, seven agents, and post-warm-up chaos", () => {
+  it("defaults to seven decision ticks with a complete post-warm-up shock", () => {
     const plan = readAgentRunPlan({}, []);
     expect(plan).toMatchObject({
-      ticks: 50,
+      ticks: 27,
       warmupTicks: 20,
-      decisionTicks: 30,
-      expectedDecisionCalls: 210,
+      decisionTicks: 7,
+      expectedDecisionCalls: 49,
       scenario: "shock_mid",
       seed: 42,
     });
     expect(plan.agents).toHaveLength(7);
     expect(plan.events[0]!.tick).toBeGreaterThan(AGENT_WARMUP_TICKS);
+    expect(plan.events[0]!.tick).toBe(21);
+    expect(plan.ticks - 1).toBeGreaterThanOrEqual(plan.events[0]!.tick + plan.events[0]!.duration);
     expect(plan.events[0]!.id).toBe(`chip_export_ban-t${plan.events[0]!.tick}`);
     expect(plan.regimeChanges).toEqual([{ tick: plan.events[0]!.tick, regime: "bear" }]);
     expect(plan).toEqual(readAgentRunPlan({}, []));
   });
+
+  it.each([0, 7, 42, 100, 4294967295])(
+    "fits every whipsaw event with default duration (seed %i)",
+    (seed) => {
+      const plan = readAgentRunPlan({ AGENT_SCENARIO: "whipsaw", AGENT_SEED: String(seed) }, []);
+      expect(plan.events).toHaveLength(3);
+      expect(plan.events[0]!.tick).toBe(21);
+      expect(plan.events.every((event) => event.tick + event.duration < plan.ticks)).toBe(true);
+    },
+  );
 
   it("supports CLI overrides, including the pnpm argument separator", () => {
     const plan = readAgentRunPlan({ AGENT_TICKS: "60", AGENTS: "momentum", AGENT_SEED: "42" }, [
@@ -93,7 +105,7 @@ describe("live agent run planning", () => {
 
 describe("warm-up and regime-estimate integration", () => {
   it("warms up without decisions and surfaces a shock after an estimate is available", async () => {
-    const plan = readAgentRunPlan({ AGENT_TICKS: "40", AGENTS: "momentum" }, []);
+    const plan = readAgentRunPlan({ AGENTS: "momentum" }, []);
     const simulation = new MarketEngine({ seed: plan.seed });
     const feed = new MarketFeed(simulation);
     simulation.registerAgent("momentum");
