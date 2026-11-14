@@ -103,7 +103,7 @@ describe("MongoMemoryIndex extensive correctness experiment", () => {
         if (wrongAgent !== target.agentId) {
           invalidateChecks += 1;
           try {
-            await index.invalidate(wrongAgent, target.id);
+            await index.invalidate(wrongAgent, target.id, "attempted by wrong agent", 250);
             wrongAgentSucceeded += 1;
           } catch {
             // expected
@@ -112,7 +112,7 @@ describe("MongoMemoryIndex extensive correctness experiment", () => {
       }
       for (const target of ids.slice(100, 120)) {
         try {
-          await index.invalidate(target.agentId, target.id);
+          await index.invalidate(target.agentId, target.id, "stress test cleanup", 250);
         } catch {
           ownerFailed += 1;
         }

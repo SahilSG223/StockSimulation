@@ -12,6 +12,8 @@ export type EmbeddedMemory = {
   content: string;
   embedding: number[];
   status: "active" | "invalidated" | "superseded" | "under_review" | "expired";
+  /** Why the status last changed (auditability — .claude/rules/memory.md). */
+  invalidationReason?: string;
   reliability: number;
   updatedAtTick: number;
   scope: {

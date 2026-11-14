@@ -6,6 +6,13 @@ export {
   toMemoryDoc,
 } from "./embedded-memory-mapper.js";
 export { FakeEmbedder } from "./fake-embedder.js";
+export {
+  INVALIDATE_LOSS_STREAK,
+  quickRegimeLabel,
+  scoreLessonOutcome,
+  type LessonOutcomeArgs,
+  type LessonOutcomeResult,
+} from "./lesson-outcome.js";
 export { MemoryIndex, type UpsertMemoryInput } from "./memory-index.js";
 export { MongoMemoryIndex } from "./mongo-memory-index.js";
 export {

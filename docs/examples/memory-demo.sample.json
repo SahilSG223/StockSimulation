@@ -1,13 +1,24 @@
 {
   "seed": 42,
   "agentId": "demo-agent",
-  "chaosPlan": [{ "preset": "chip_export_ban", "tick": 1 }],
+  "chaosPlan": [
+    {
+      "preset": "chip_export_ban",
+      "tick": 6
+    }
+  ],
   "frames": [
     {
       "phase": "learn",
       "tick": 0,
       "headline": "Seeded semantic lesson into memory",
-      "prices": { "SEMI": 100, "TECH": 100 },
+      "prices": {
+        "TECH": 100,
+        "SEMI": 80,
+        "ENRG": 60,
+        "BANK": 50,
+        "CONS": 40
+      },
       "events": [],
       "memoriesFired": [
         {
@@ -22,36 +33,61 @@
       "phase": "act_with_memory",
       "tick": 0,
       "headline": "Decision cites retrieved memory",
-      "prices": { "SEMI": 100, "TECH": 100 },
-      "events": [],
-      "decision": {
-        "reasoning": "Retrieved bull/SEMI momentum lesson — buying SEMI.",
-        "strategy": "momentum",
-        "confidence": 0.7,
-        "memoryReferences": ["lesson-semi-momentum"],
-        "orders": [{ "symbol": "SEMI", "side": "buy", "quantity": 5 }]
+      "prices": {
+        "TECH": 100,
+        "SEMI": 80,
+        "ENRG": 60,
+        "BANK": 50,
+        "CONS": 40
       },
+      "events": [],
       "memoriesFired": [
         {
           "id": "lesson-semi-momentum",
           "content": "In bull regimes, buy SEMI on positive AI demand — momentum in semiconductors paid off.",
-          "retrievalScore": 0.91,
+          "retrievalScore": 0.5203909649030615,
           "status": "active"
         }
       ],
+      "decision": {
+        "reasoning": "Retrieved bull/SEMI momentum lesson — buying SEMI.",
+        "strategy": "momentum",
+        "confidence": 0.7,
+        "memoryReferences": [
+          "lesson-semi-momentum"
+        ],
+        "orders": [
+          {
+            "symbol": "SEMI",
+            "side": "buy",
+            "quantity": 5
+          }
+        ]
+      },
       "portfolio": {
-        "cash": 9500,
-        "positions": [{ "symbol": "SEMI", "quantity": 5 }]
+        "cash": 99599.6,
+        "positions": [
+          {
+            "symbol": "SEMI",
+            "quantity": 5
+          }
+        ]
       }
     },
     {
       "phase": "shock",
-      "tick": 1,
+      "tick": 6,
       "headline": "Government restricts chip exports",
-      "prices": { "SEMI": 97, "TECH": 99 },
+      "prices": {
+        "TECH": 98.91220890983982,
+        "SEMI": 80.04616871869595,
+        "ENRG": 58.44209197504427,
+        "BANK": 52.3714578283319,
+        "CONS": 41.51481388215499
+      },
       "events": [
         {
-          "id": "chip_export_ban-t1",
+          "id": "chip_export_ban-t6",
           "type": "chip_export_ban",
           "headline": "Government restricts chip exports"
         }
@@ -60,25 +96,39 @@
     },
     {
       "phase": "govern",
-      "tick": 1,
-      "headline": "Invalidated stale bull/SEMI lesson after regime-mismatch shock",
-      "prices": { "SEMI": 97, "TECH": 99 },
+      "tick": 10,
+      "headline": "Invalidated lesson: lesson lost 4 trades in sideways regime (learned in bull) at tick 10",
+      "prices": {
+        "TECH": 98.19038962839863,
+        "SEMI": 73.1775602051991,
+        "ENRG": 56.65953663625609,
+        "BANK": 52.29688243550616,
+        "CONS": 40.627055950536786
+      },
       "events": [],
       "memoriesFired": [
         {
           "id": "lesson-semi-momentum",
           "content": "In bull regimes, buy SEMI on positive AI demand — momentum in semiconductors paid off.",
           "retrievalScore": 0,
-          "status": "invalidated"
+          "status": "invalidated",
+          "reason": "lesson lost 4 trades in sideways regime (learned in bull) at tick 10"
         }
       ]
     },
     {
       "phase": "act_after_govern",
-      "tick": 1,
+      "tick": 10,
       "headline": "Post-governance decision — stale lesson must not fire",
-      "prices": { "SEMI": 97, "TECH": 99 },
+      "prices": {
+        "TECH": 98.19038962839863,
+        "SEMI": 73.1775602051991,
+        "ENRG": 56.65953663625609,
+        "BANK": 52.29688243550616,
+        "CONS": 40.627055950536786
+      },
       "events": [],
+      "memoriesFired": [],
       "decision": {
         "reasoning": "No active lessons retrieved — holding.",
         "strategy": "conservative",
@@ -86,10 +136,14 @@
         "memoryReferences": [],
         "orders": []
       },
-      "memoriesFired": [],
       "portfolio": {
-        "cash": 9500,
-        "positions": [{ "symbol": "SEMI", "quantity": 5 }]
+        "cash": 99599.6,
+        "positions": [
+          {
+            "symbol": "SEMI",
+            "quantity": 5
+          }
+        ]
       }
     }
   ]
