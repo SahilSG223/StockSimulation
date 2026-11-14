@@ -156,6 +156,15 @@ On failure it prints a sanitized error with the run id, agent and tick. There
 is no baseline fallback and no automatic retry: orders submitted earlier in the
 same tick may already have filled, so inspect the run before retrying.
 
+Order symbols are restricted to an enum built from the current observation's
+price keys. The same set is checked when parsing the model response, and the
+runtime still validates the whole batch before submitting orders. The Energy
+asset's identifier is `ENRG`; aliases such as `ENERG` are not accepted. This
+prevents symbol spelling from being an unconstrained generation choice. A
+rejected agent decision submits no orders from that batch; earlier agents in
+the same tick may already have executed. A new invocation starts a new simulation,
+not a resume of the failed run's portfolios.
+
 ## Consistency
 
 Atlas indexes asynchronously, so a just-saved vector may not be returned

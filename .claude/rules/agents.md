@@ -17,6 +17,9 @@
 - **SYSTEM = instructions**, **USER = data**. Never put untrusted/user/market
   text into the system prompt (prompt-injection risk).
 - Prefer native structured output validated with Zod over free-form JSON parsing.
+- Constrain order symbols in the native output schema to the current observation's
+  price keys and validate that set again on return. A free-form symbol once let
+  the model emit `ENERG` instead of `ENRG`, aborting a run at tick 30.
 - Constrain shape, not fake quotas ("emit exactly 3 memories").
 - Escape/delimiter-wrap injected data so it cannot close your tags.
 
