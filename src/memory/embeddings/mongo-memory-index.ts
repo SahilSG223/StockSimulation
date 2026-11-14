@@ -1,58 +1,99 @@
 /**
- * Mongo-backed semantic memory index — **implement on second laptop**.
+ * Mongo-backed semantic memory index. Mirrors `MemoryIndex`'s call shape so
+ * callers can swap: `new MemoryIndex(embedder)` -> `new MongoMemoryIndex(db, embedder)`.
  *
- * Mirror `MemoryIndex` call shape so call sites can swap:
- *   new MemoryIndex(embedder)  →  new MongoMemoryIndex(db, embedder)
- *
- * Non-negotiables (see `.claude/rules/memory.md`):
- * - EVERY Mongo filter includes `agentId` (never post-filter only)
- * - Prefer metadata filters in the query, then rank with `rankWithEmbeddings`
- * - Do not embed raw prices — only lesson `content`
- * - String `_id`s (UUID), same as `MongoMemoryRepository`
- *
- * Suggested implementation order (also in PR body):
- * 1. `upsert` — embed → `toMemoryDoc` → `MongoMemoryRepository.insert` / update
- * 2. `invalidate` — `updateForAgent` status=invalidated
- * 3. `search` — query `{ agentId, status: "active", ...scope }` THEN
- *    `rankWithEmbeddings` (Atlas Vector Search optional stretch)
- * 4. Live tests under `RUN_MONGO_TESTS=1`
+ * Isolation (`.claude/rules/memory.md`) is enforced in every Mongo filter via
+ * `MongoMemoryRepository`, which always includes `agentId` — never post-filtered
+ * only in JS.
  */
 
 import type { Db } from "mongodb";
+import { MongoMemoryRepository } from "../memories/mongo-memory-repository.js";
+import { embedMemoryContent } from "./embed-memory.js";
+import { toEmbeddedMemory, toMemoryDoc } from "./embedded-memory-mapper.js";
 import type { UpsertMemoryInput } from "./memory-index.js";
-import type { RankedEmbeddedMemory, RetrievalContext } from "./rank-with-embeddings.js";
+import { rankWithEmbeddings, type RankedEmbeddedMemory, type RetrievalContext } from "./rank-with-embeddings.js";
 import type { EmbeddedMemory, Embedder } from "./types.js";
 
-const NOT_IMPL =
-  "MongoMemoryIndex not implemented — second laptop: see PR body / this file header";
-
 export class MongoMemoryIndex {
+  private readonly repo: MongoMemoryRepository;
+
   constructor(
-    private readonly db: Db,
+    db: Db,
     private readonly embedder: Embedder,
   ) {
-    void this.db;
-    void this.embedder;
+    this.repo = new MongoMemoryRepository(db);
   }
 
-  async upsert(_input: UpsertMemoryInput): Promise<EmbeddedMemory> {
-    return Promise.reject(new Error(`MongoMemoryIndex.upsert: ${NOT_IMPL}`));
+  async upsert(input: UpsertMemoryInput): Promise<EmbeddedMemory> {
+    const id = input.id ?? crypto.randomUUID();
+    const embedding =
+      input.embedding ?? (await embedMemoryContent(this.embedder, input.content)).embedding;
+    const record: EmbeddedMemory = {
+      id,
+      agentId: input.agentId,
+      content: input.content,
+      embedding,
+      status: input.status ?? "active",
+      reliability: input.reliability ?? 0.7,
+      updatedAtTick: input.updatedAtTick,
+      scope: input.scope ?? { sectors: [], regimes: [], eventTypes: [], assets: [] },
+    };
+
+    // One lookup serves both the insert-vs-update decision and, on update,
+    // preserving the original createdAtTick/version (ponytail: check-then-act,
+    // fine at this scale — add a findOneAndUpdate upsert if concurrent upserts
+    // of the same id become a real scenario).
+    const existing = input.id ? await this.repo.findForAgent(input.agentId, input.id) : undefined;
+    const doc = toMemoryDoc(
+      record,
+      existing
+        ? {
+            type: existing.type,
+            sourceExperienceIds: existing.sourceExperienceIds,
+            createdAtTick: existing.createdAtTick,
+            version: existing.version + 1,
+          }
+        : undefined,
+    );
+
+    if (existing) {
+      await this.repo.updateForAgent(input.agentId, id, doc);
+    } else {
+      await this.repo.insert(doc);
+    }
+    return record;
   }
 
-  async get(_agentId: string, _id: string): Promise<EmbeddedMemory | undefined> {
-    return Promise.reject(new Error(`MongoMemoryIndex.get: ${NOT_IMPL}`));
+  /** Mongo filter always includes agentId; returns any status, like `MemoryIndex.get`. */
+  async get(agentId: string, id: string): Promise<EmbeddedMemory | undefined> {
+    const doc = await this.repo.findForAgent(agentId, id);
+    return doc ? toEmbeddedMemory(doc) : undefined;
   }
 
-  async invalidate(_agentId: string, _id: string): Promise<EmbeddedMemory | undefined> {
-    return Promise.reject(new Error(`MongoMemoryIndex.invalidate: ${NOT_IMPL}`));
+  /** Fail closed: throws (via `updateForAgent`) if `id` doesn't belong to `agentId`. */
+  async invalidate(agentId: string, id: string): Promise<EmbeddedMemory | undefined> {
+    await this.repo.updateForAgent(agentId, id, { status: "invalidated" });
+    return this.get(agentId, id);
   }
 
-  async search(_args: {
+  async search(args: {
     agentId: string;
     query: string;
     ctx: Omit<RetrievalContext, "agentId">;
     limit?: number;
   }): Promise<RankedEmbeddedMemory[]> {
-    return Promise.reject(new Error(`MongoMemoryIndex.search: ${NOT_IMPL}`));
+    const queryEmbedding = await this.embedder.embed(args.query);
+    // agentId + status: "active" is enforced here, in Mongo. Scope is left to
+    // rankWithEmbeddings' soft contextual scoring, matching MemoryIndex exactly
+    // (scope narrows relevance, it never hard-excludes a memory).
+    const docs = await this.repo.listActiveForAgent(args.agentId);
+    const memories = docs.filter((d) => d.embedding && d.embedding.length > 0).map(toEmbeddedMemory);
+    const ranked = rankWithEmbeddings({
+      memories,
+      queryEmbedding,
+      ctx: { ...args.ctx, agentId: args.agentId },
+    });
+    return ranked.slice(0, args.limit ?? 5);
   }
 }
