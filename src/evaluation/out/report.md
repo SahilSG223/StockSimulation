@@ -1,6 +1,6 @@
 # Evaluation suite report
 
-_Generated 2026-11-14T20:57:21.285Z · 20 seeds × 3 scenarios × 3 memory modes. Do not hand-edit; regenerate with `pnpm tsx src/evaluation/suite.ts`._
+_Generated 2026-11-14T21:08:27.973Z · 20 seeds × 3 scenarios × 3 memory modes. Do not hand-edit; regenerate with `pnpm tsx src/evaluation/suite.ts`._
 
 Thesis under test: **governed memory makes agents adapt faster to market change than no memory or ungoverned ('raw') memory.** Means are over all seeds and all 7 archetypes per cell.
 

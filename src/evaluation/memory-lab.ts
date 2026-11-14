@@ -32,7 +32,7 @@ import {
   type MemoryRecord,
 } from "../memory/governance/index.js";
 import type { RegimeId } from "../simulation/index.js";
-import type { EvalLifecycleEvent, MemoryMode, RetrievedMemory } from "./types.js";
+import type { EvalLifecycleEvent, EvalRetrievedMemory, MemoryMode } from "./types.js";
 
 const MEMORY_TOP_K = 3;
 /**
@@ -140,7 +140,7 @@ export class EvalMemoryStore {
     tick: number;
     regimeEstimate: string | undefined;
     sectors: readonly string[];
-  }): RetrievedMemory[] {
+  }): EvalRetrievedMemory[] {
     if (this.mode === "none") return [];
     const query = retrievalQuery(args.sectors);
 

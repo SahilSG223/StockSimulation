@@ -6,7 +6,9 @@ export {
   EXPERIENCE_VECTOR_INDEXES,
   EXPERIENCE_VECTOR_SEARCH_INDEX,
   MEMORY_INDEXES,
-  MEMORY_VECTOR_INDEX_HINT,
+  MEMORY_VECTOR_FILTER_PATHS,
+  MEMORY_VECTOR_SEARCH_INDEX,
   ensureExperienceVectorSearchIndex,
   ensureMemoryIndexes,
+  ensureMemoryVectorSearchIndex,
 } from "./indexes.js";

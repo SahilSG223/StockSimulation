@@ -13,7 +13,7 @@
     "memory:check": "tsx src/memory/check.ts",
     "agents": "tsx src/agents/run.ts",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src tests",
+    "lint": "eslint src tests scripts experiments",
     "format": "prettier --write \"src/**/*.{ts,js}\" \"tests/**/*.{ts,js}\" \"*.config.js\" \"package.json\"",
     "format:check": "prettier --check \"src/**/*.{ts,js}\" \"tests/**/*.{ts,js}\" \"*.config.js\" \"package.json\"",
     "test": "vitest run",
@@ -21,7 +21,9 @@
     "precommit": "pnpm typecheck && pnpm test",
     "check": "pnpm typecheck && pnpm test && pnpm lint",
     "experiments": "vitest run tests/experiments/suite.integration.test.ts",
-    "ensure-indexes": "tsx scripts/ensure-indexes.ts"
+    "ensure-indexes": "tsx scripts/ensure-indexes.ts",
+    "eval": "tsx src/evaluation/suite.ts",
+    "demo:json": "tsx scripts/demo-json.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
