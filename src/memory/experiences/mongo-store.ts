@@ -77,11 +77,14 @@ export class MongoExperienceStore {
       filter["scope.eventTypes"] = { $in: [...q.eventTypes] };
     }
 
-    let cursor = this.collection.find(filter).sort({ tick: 1, _id: 1 });
+    // Sort descending + limit, then reverse: avoids a count()+skip() race against
+    // concurrent writes, and `limit(0)` naturally means "no limit" (mirrors the
+    // in-memory store's `slice(-0)` == full array quirk for `limit: 0`).
+    const cursor = this.collection.find(filter).sort({ tick: -1, _id: -1 });
     if (q.limit !== undefined && q.limit >= 0) {
-      const count = await this.collection.countDocuments(filter);
-      cursor = cursor.skip(Math.max(count - q.limit, 0));
+      cursor.limit(q.limit);
     }
-    return cursor.toArray();
+    const rows = await cursor.toArray();
+    return rows.reverse();
   }
 }

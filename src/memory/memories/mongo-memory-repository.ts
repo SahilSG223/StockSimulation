@@ -5,28 +5,9 @@
 
 import type { Collection, Db, Filter } from "mongodb";
 import { COLLECTIONS } from "../../database/collections.js";
+import { memoryDocSchema, type MemoryDoc } from "./memory-doc-schema.js";
 
-export type MemoryDoc = {
-  _id?: string;
-  agentId: string;
-  type: "semantic" | "strategic" | "social";
-  content: string;
-  /** Filled by embeddings PR — 1536 dims for text-embedding-3-small */
-  embedding?: number[];
-  sourceExperienceIds: string[];
-  createdAtTick: number;
-  updatedAtTick: number;
-  confidence: number;
-  reliability: number;
-  scope: {
-    sectors: string[];
-    regimes: string[];
-    eventTypes: string[];
-    assets: string[];
-  };
-  status: "active" | "under_review" | "superseded" | "invalidated" | "expired";
-  version: number;
-};
+export type { MemoryDoc };
 
 export class MongoMemoryRepository {
   private readonly collection: Collection<MemoryDoc>;
@@ -36,8 +17,10 @@ export class MongoMemoryRepository {
   }
 
   async insert(doc: MemoryDoc): Promise<MemoryDoc> {
-    const { insertedId } = await this.collection.insertOne(doc);
-    return { ...doc, _id: String(insertedId) };
+    const parsed = memoryDocSchema.parse(doc);
+    const record: MemoryDoc = { ...parsed, _id: parsed._id ?? crypto.randomUUID() };
+    await this.collection.insertOne(record);
+    return record;
   }
 
   /** Filters by agentId + status in the Mongo query. */
@@ -51,9 +34,14 @@ export class MongoMemoryRepository {
     patch: Partial<MemoryDoc>,
   ): Promise<void> {
     const { _id: _ignored, ...setFields } = patch;
-    await this.collection.updateOne(
+    const result = await this.collection.updateOne(
       { _id: id, agentId } as Filter<MemoryDoc>,
       { $set: setFields },
     );
+    if (result.matchedCount === 0) {
+      throw new Error(
+        `MongoMemoryRepository.updateForAgent: no memory ${id} found for agent ${agentId}`,
+      );
+    }
   }
 }

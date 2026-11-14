@@ -11,7 +11,10 @@ export async function getDb(): Promise<DbHandle> {
     throw new Error("Missing MONGODB_URI — set it in .env (never commit it)");
   }
   if (!clientPromise) {
-    clientPromise = new MongoClient(uri).connect();
+    clientPromise = new MongoClient(uri).connect().catch((err: unknown) => {
+      clientPromise = undefined;
+      throw err;
+    });
   }
   const client = await clientPromise;
   return client.db(dbName);
