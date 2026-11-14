@@ -26,13 +26,14 @@ import { MEMORY_MODES } from "./types.js";
 
 const REPLAY_SCENARIO = "regime_reversal" as const;
 /**
- * Demo seed. Chosen (over the sim's old seed 42, which no longer trips governance
- * after a trajectory change) because governed memory visibly earns its keep here:
- * ~13 lesson invalidations, stale-influence well below raw, and equity at or above
- * raw. Any seed works in the viewer; this one tells the story. Re-scan if the
- * simulation version changes.
+ * Demo seed, picked by scanning seeds 1–100 with the shared regime estimate
+ * (#23): only 18/100 seeds trip any invalidation, and only 97 and 76 combine
+ * ≥5 invalidations with governed equity ≥ raw and lower stale influence. Seed 97:
+ * 6 invalidations, mean equity 105,013 vs raw 104,280, stale 0.26 vs 0.89. This is
+ * a chosen seed, not a typical one; see src/evaluation/out/report.md for the
+ * 20-seed averages. Re-scan if the simulation version or governance changes.
  */
-const REPLAY_SEED = 31;
+const REPLAY_SEED = 97;
 const REASONING_MAX = 400;
 /** Rolling windows for the per-tick market-health label and volatility estimate. */
 const HEALTH_WINDOW = 5;
