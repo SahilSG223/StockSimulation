@@ -20,11 +20,37 @@ Owner column if needed — keep the path ownership.
 | **Memory** | Experiences, embeddings, retrieval, governance, `agentId` isolation → `src/memory/` | **Daniel** | Experience write + scoped read; then governance (stale/contradiction) — core thesis |
 | **Simulation** | Keep Phase 1 stable; market observations/features → `src/simulation/`, `src/market/` | **Person B** | Don’t rewrite engine; extend `observe()` / features only as agents need |
 | **Agents** | Archetypes, decision cycle, Zod I/O, LLM calls → `src/agents/` | **Person C** | Zod decision schema + 1 archetype submitting orders into sim (no memory first) |
-| **Eval + Frontend/Demo** | Baselines A/B/C, metrics **and the UI** (live sim, portfolios, “which memories fired”) → `src/evaluation/` + `app/` | **Person D** | Scenario/seed recording + stub dashboard or CLI that shows decision + memory refs |
+| **Eval + Frontend/Demo** | Baselines A/B/C, metrics **and the UI** (live sim, portfolios, “which memories fired”) → `src/evaluation/` + `app/` | **Person D** | Follow [`UI_PLAYBOOK.md`](./UI_PLAYBOOK.md): three MVP panels; mock `DemoFrame` JSON until runner lands |
 
-**Yes — frontend is Person D.** “Demo” means the observability UI (`app/`), not a separate fifth owner.
+**Yes — frontend is Person D.** “Demo” means the observability UI (`app/`), not a separate fifth owner. Full UI instructions: **`docs/UI_PLAYBOOK.md`**.
 
 Replace Person B/C/D with real names in standup. Stay in your `src/` lane.
+
+### Chaos Director (competition extra — not an “agent”)
+
+We want **dynamic shocks** without an LLM rewriting the market (that would break
+seeded A/B/C demos).
+
+| | |
+| --- | --- |
+| **What** | Seeded planner that returns `MarketEvent[]` from existing `createShock` / `SHOCK_PRESETS`, then the engine `scheduleEvent`s them |
+| **Where** | `src/simulation/chaos-director.ts` (impl ticket on laptop 2) |
+| **Not** | A trading “chaos agent”, LLM price mutation, or non-seeded `Math.random()` |
+| **Why** | Judges see a living market; we still replay the same chaos for baselines |
+
+Scenarios (minimum): `stable` (no extra shocks), `shock_mid` (one preset mid-run),
+`whipsaw` (crash → brief relief → sector ban) — cut `whipsaw` if time dies.
+
+API sketch for implementers:
+
+```ts
+planChaos({ seed, scenarioId: "shock_mid" | "whipsaw" | "stable" }): {
+  events: MarketEvent[];  // ready for scheduleEvent
+  plan: { preset: string; tick: number }[];  // log for UI / judges
+}
+```
+
+Same seed → same plan. Record `chaosPlan` on every demo/experiment export.
 
 ## File ownership (`src/`)
 
@@ -118,11 +144,12 @@ without hand-editing numbers.
 
 ### Phase 6 — Demo
 
-- [ ] Dashboard: market + portfolio + recent trades
-- [ ] Decision panel: reasoning + **which memories** influenced the action
-- [ ] Narrated path: learn → shock → invalidate/deprioritize → behavior change
+- [ ] Dashboard MVP per [`UI_PLAYBOOK.md`](./UI_PLAYBOOK.md) (market / decision+memories / governance)
+- [ ] Narrated path frames: learn → act_with_memory → shock → govern → act_after_govern
+- [ ] Chaos Director schedule visible (seed + preset ticks) — not hand-waved
+- [ ] Backup: replay sample JSON if live LLM flakes
 
-**Done when:** a 3–5 minute walkthrough tells that story live.
+**Done when:** a 3–5 minute walkthrough tells that story live (twice, same seed).
 
 ---
 
@@ -168,6 +195,8 @@ Do **not** spend hackathon time on:
 - General-purpose forecasting models
 - Heavy multi-agent orchestration frameworks
 - Terraform / Helm / multi-service deploy (see `ENGINEERING.md`)
+- **LLM / “chaos agent” that invents prices or fills** — use seeded Chaos Director + shock presets only
+- Atlas Vector Search stretch, websockets, auth, or design-system perfection before MVP demo works
 
 Ship a thin vertical slice that proves governed memory under stress.
 
