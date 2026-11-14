@@ -8,6 +8,7 @@ export { collectEffectsBySymbol, eventAffectsAsset, stepPrices } from "./price-g
 export { REGIME_PARAMS, getRegimeParams } from "./regimes.js";
 export { validateOrder, type RiskLimits } from "./risk-manager.js";
 export { SeededRng } from "./rng.js";
+export { SIMULATION_VERSION } from "./version.js";
 export type {
   AssetParams,
   ExecutionResult,
