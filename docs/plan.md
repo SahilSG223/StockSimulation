@@ -17,13 +17,12 @@ Owner column if needed — keep the path ownership.
 
 | Stream | Owns | Owner | Day-1 deliverable |
 | --- | --- | --- | --- |
-| **Simulation** | Seeded prices, events, orders/fills, portfolios, clock, `src/market/` observations | **Daniel** | Phase 1 green on `main`; shared `Order`/`Tick`/`Asset` types |
-| **Agents** | Archetypes, decision cycle, Zod I/O, LLM calls → `src/agents/` | **Person B** | Zod decision schema + 1 archetype submitting orders into sim (no memory) |
-| **Memory** | Experiences, embeddings, retrieval, governance, `agentId` isolation → `src/memory/` | **Person C** | Experience write + `agentId`-scoped read API (ranking can be naive) |
-| **Eval + Demo** | Baselines A/B/C, scenarios, metrics + dashboard showing memory influence → `src/evaluation/` + `app/` | **Person D** | Scenario config + seed recording; stub UI or CLI that prints decision + memory refs |
+| **Memory** | Experiences, embeddings, retrieval, governance, `agentId` isolation → `src/memory/` | **Daniel** | Experience write + scoped read; then governance (stale/contradiction) — core thesis |
+| **Simulation** | Keep Phase 1 stable; market observations/features → `src/simulation/`, `src/market/` | **Person B** | Don’t rewrite engine; extend `observe()` / features only as agents need |
+| **Agents** | Archetypes, decision cycle, Zod I/O, LLM calls → `src/agents/` | **Person C** | Zod decision schema + 1 archetype submitting orders into sim (no memory first) |
+| **Eval + Demo** | Baselines A/B/C, scenarios, metrics + dashboard showing memory influence → `src/evaluation/` + `app/` | **Person D** | Scenario config + seed recording; stub UI/CLI that prints decision + memory refs |
 
-Replace Person B/C/D with real names in the first standup. Do not three people
-edit the same `src/` tree.
+Replace Person B/C/D with real names in standup. Stay in your `src/` lane.
 
 ## File ownership (`src/`)
 
