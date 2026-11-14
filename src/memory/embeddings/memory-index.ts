@@ -16,7 +16,8 @@ export type UpsertMemoryInput = {
 
 /**
  * In-memory vector index for semantic memories.
- * Swap for Atlas Vector Search once the mongo PR lands — same call shape.
+ * Laptop-2 follow-up: persist via MongoMemoryRepository / Atlas Vector Search —
+ * keep this call shape (upsert / search / invalidate with agentId).
  */
 export class MemoryIndex {
   private readonly byId = new Map<string, EmbeddedMemory>();

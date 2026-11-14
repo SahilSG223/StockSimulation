@@ -5,6 +5,7 @@ export {
   type SectorLookup,
 } from "./recorder.js";
 export { ExperienceStore } from "./store.js";
+export { MongoExperienceStore } from "./mongo-store.js";
 export type {
   AgentId,
   CreateExperienceInput,
