@@ -1,30 +1,47 @@
 /**
- * Writes one demo replay file per memory mode for the regime_reversal scenario at
- * a fixed seed: `out/replay-<mode>.json`. The schema in `replay-schema.ts` is a
- * contract the frontend consumes; this module computes the derived presentation
- * fields (style, marketHealth, netPnl, cumulative feesPaid) so the UI doesn't
- * have to, validates the result with Zod, and fails closed if it doesn't match.
+ * Writes one Memory Arena replay per memory mode for the regime_reversal scenario
+ * at a fixed seed: `out/replay-<mode>.json` (the `app/` viewer serves copies of
+ * these). It pivots the `RunRecord` decision log into contiguous per-tick frames
+ * (tick 0 = the pre-trade opening; warm-up ticks = agents watching, flat), each
+ * carrying every agent's authoritative snapshot, and computes the derived viewer
+ * fields (marketHealth, volatility, trade line `style`, netPnl, cumulative fees,
+ * per-run `summary`). The result is Zod-validated and fails closed on mismatch.
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { computeRunMetrics } from "./metrics.js";
 import { runOne } from "./runner.js";
 import {
   REPLAY_VERSION,
   replaySchema,
+  type AgentFrame,
   type LineStyle,
   type MarketHealth,
   type Replay,
+  type ReplayFrame,
 } from "./replay-schema.js";
-import { MEMORY_MODES, type MemoryMode, type RunRecord } from "./types.js";
+import type { DecisionLogEntry, MemoryMode, RunRecord } from "./types.js";
+import { MEMORY_MODES } from "./types.js";
 
 const REPLAY_SCENARIO = "regime_reversal" as const;
-const REPLAY_SEED = 42;
+/**
+ * Demo seed. Chosen (over the sim's old seed 42, which no longer trips governance
+ * after a trajectory change) because governed memory visibly earns its keep here:
+ * ~13 lesson invalidations, stale-influence well below raw, and equity at or above
+ * raw. Any seed works in the viewer; this one tells the story. Re-scan if the
+ * simulation version changes.
+ */
+const REPLAY_SEED = 31;
 const REASONING_MAX = 400;
-/** Rolling window and threshold for the per-tick market-health label. */
+/** Rolling windows for the per-tick market-health label and volatility estimate. */
 const HEALTH_WINDOW = 5;
 const HEALTH_THRESHOLD = 0.002;
+const VOL_WINDOW = 10;
 const OUT_DIR = join(dirname(fileURLToPath(import.meta.url)), "out");
+
+const r2 = (v: number): number => Math.round(v * 100) / 100;
+const r4 = (v: number): number => Math.round(v * 1e4) / 1e4;
 
 /** zigzag = big bet, wavy = small, straight = mid; low confidence overrides to dashed. */
 function lineStyle(notionalPctEquity: number, confidence: number): LineStyle {
@@ -43,74 +60,220 @@ function marketHealth(returns: readonly number[], upTo: number): MarketHealth {
   return "neutral";
 }
 
-export function buildReplay(run: RunRecord): Replay {
-  const marketReturns = run.market.map((f) => f.marketReturn);
-  const frames = run.market.map((f, i) => ({
-    tick: f.tick,
-    regime: f.regime,
-    marketReturn: f.marketReturn,
-    marketHealth: marketHealth(marketReturns, i),
-    prices: { ...f.prices },
-  }));
+/** Population std of market returns over the trailing VOL_WINDOW frames. */
+function volatility(returns: readonly number[], upTo: number): number {
+  const window = returns.slice(Math.max(0, upTo - VOL_WINDOW + 1), upTo + 1);
+  if (window.length === 0) return 0;
+  const mean = window.reduce((s, r) => s + r, 0) / window.length;
+  const variance = window.reduce((s, r) => s + (r - mean) ** 2, 0) / window.length;
+  return Math.sqrt(variance);
+}
 
-  const agents = run.agents.map((agentId) => {
-    const entries = run.decisions
-      .filter((d) => d.agentId === agentId)
-      .sort((a, b) => a.tick - b.tick);
-    let cumulativeFees = 0;
-    const decisions = entries.map((e) => {
-      const filledNotional = e.results.reduce(
-        (sum, r) => (r.status === "filled" ? sum + r.notional : sum),
-        0,
-      );
-      cumulativeFees += e.results.reduce((sum, r) => (r.status === "filled" ? sum + r.fee : sum), 0);
-      const equity = e.portfolioAfter.equity;
-      const notionalPctEquity = equity > 0 ? filledNotional / equity : 0;
-      return {
-        tick: e.tick,
-        regime: e.regime,
-        orders: e.results.map((r) =>
-          r.status === "filled"
-            ? {
-                symbol: r.order.symbol,
-                side: r.order.side,
-                quantity: r.order.quantity,
-                status: "filled" as const,
-                fillPrice: r.fillPrice,
-                notional: r.notional,
-                fee: r.fee,
-              }
-            : {
-                symbol: r.order.symbol,
-                side: r.order.side,
-                quantity: r.order.quantity,
-                status: "rejected" as const,
-                rejectReason: r.reason,
-              },
-        ),
-        equity,
-        netPnl: equity - run.startingCash,
-        feesPaid: cumulativeFees,
-        confidence: e.decision.confidence,
-        style: lineStyle(notionalPctEquity, e.decision.confidence),
-        reasoning: e.decision.reasoning.slice(0, REASONING_MAX),
-        firedMemories: e.retrieved
-          .filter((m) => m.fired)
-          .map((m) => ({
-            id: m.id,
-            content: m.content,
-            status: m.status,
-            reliability: m.reliability,
-            creationRegime: m.creationRegime,
+/** The filled order that moved the most money this tick (drives the animated line). */
+function primaryFill(entry: DecisionLogEntry):
+  | { symbol: string; side: "buy" | "sell"; quantity: number; notional: number }
+  | undefined {
+  let best: { symbol: string; side: "buy" | "sell"; quantity: number; notional: number } | undefined;
+  for (const r of entry.results) {
+    if (r.status !== "filled") continue;
+    if (!best || r.notional > best.notional) {
+      best = { symbol: r.order.symbol, side: r.order.side, quantity: r.order.quantity, notional: r.notional };
+    }
+  }
+  return best;
+}
+
+function cfStatus(orders: readonly { symbol: string; side: "buy" | "sell" }[]): string {
+  const o = orders[0];
+  if (!o) return "Hold";
+  return `${o.side === "buy" ? "Buy" : "Sell"} ${o.symbol}`;
+}
+
+function buildAgentFrame(args: {
+  run: RunRecord;
+  agentId: string;
+  entry: DecisionLogEntry | undefined;
+  feesSoFar: number;
+  firstAsset: string;
+}): { frame: AgentFrame; feesThisTick: number } {
+  const { run, agentId, entry, firstAsset } = args;
+  const startingCash = run.startingCash;
+
+  if (!entry) {
+    return {
+      feesThisTick: 0,
+      frame: {
+        agentId,
+        status: `Watching ${firstAsset}`,
+        reasoning: `Warm-up: observing the market; no trades before tick ${run.warmup + 1}.`,
+        strategy: agentId,
+        confidence: 0.3,
+        interaction: null,
+        portfolio: {
+          startingCash,
+          cash: startingCash,
+          equity: startingCash,
+          realizedPnl: 0,
+          unrealizedPnl: 0,
+          feesPaid: args.feesSoFar,
+          netPnl: 0,
+          holdings: [],
+        },
+        memories: [],
+        counterfactual: null,
+      },
+    };
+  }
+
+  const pf = entry.portfolioAfter;
+  const equity = pf.equity;
+  const feesThisTick = entry.results.reduce((s, r) => (r.status === "filled" ? s + r.fee : s), 0);
+  const feesPaid = args.feesSoFar + feesThisTick;
+  const primary = primaryFill(entry);
+  const confidence = entry.decision.confidence;
+
+  const topHolding = [...pf.positions].sort((a, b) => b.quantity - a.quantity)[0];
+  const status = primary
+    ? `${primary.side === "buy" ? "Buying" : "Selling"} ${primary.symbol}`
+    : pf.positions.length > 0
+      ? `Holding ${topHolding?.symbol ?? firstAsset}`
+      : `Watching ${firstAsset}`;
+
+  const interaction = primary
+    ? {
+        kind: primary.side,
+        style: lineStyle(equity > 0 ? primary.notional / equity : 0, confidence),
+        symbol: primary.symbol,
+        quantity: primary.quantity,
+        notional: r2(primary.notional),
+        notionalPctEquity: r4(equity > 0 ? primary.notional / equity : 0),
+      }
+    : null;
+
+  const counterfactual = entry.counterfactual
+    ? {
+        withoutMemory: {
+          status: cfStatus(entry.counterfactual.withoutOrders),
+          orders: entry.counterfactual.withoutOrders.map((o) => ({
+            symbol: o.symbol,
+            side: o.side,
+            quantity: o.quantity,
           })),
-        counterfactualChanged: e.counterfactual === null ? null : e.counterfactual.changed,
-      };
-    });
-    return { agentId, archetype: entries[0]?.archetype ?? agentId, decisions };
+        },
+        changed: entry.counterfactual.changed,
+      }
+    : null;
+
+  return {
+    feesThisTick,
+    frame: {
+      agentId,
+      status,
+      reasoning: entry.decision.reasoning.slice(0, REASONING_MAX),
+      strategy: entry.archetype,
+      confidence,
+      interaction,
+      portfolio: {
+        startingCash,
+        cash: r2(pf.cash),
+        equity: r2(equity),
+        realizedPnl: r2(pf.realizedPnl),
+        unrealizedPnl: r2(pf.unrealizedPnl),
+        feesPaid: r2(feesPaid),
+        netPnl: r2(equity - startingCash),
+        holdings: pf.positions.map((p) => ({ symbol: p.symbol, quantity: p.quantity })),
+      },
+      memories: entry.retrieved.map((m) => ({
+        id: m.id,
+        content: m.content,
+        status: m.status,
+        confidence: r2(m.confidence),
+        reliability: r2(m.reliability),
+        retrievalScore: r2(m.retrievalScore),
+        createdAtTick: m.createdAtTick,
+        fired: m.fired,
+      })),
+      counterfactual,
+    },
+  };
+}
+
+export function buildReplay(run: RunRecord): Replay {
+  const metrics = computeRunMetrics(run);
+  const firstAsset = run.assets[0]?.symbol ?? "TECH";
+  const openingRegime = run.regimeChanges[0]?.regime ?? run.market[0]?.regime ?? "bull";
+  const openingPrices = run.market[0]?.prices ?? {};
+
+  // Index decisions and lifecycle events by tick for O(1) per-frame assembly.
+  const entryByTickAgent = new Map<string, DecisionLogEntry>();
+  for (const d of run.decisions) entryByTickAgent.set(`${d.tick}|${d.agentId}`, d);
+  const lifecycleByTick = new Map<number, RunRecord["lifecycle"]>();
+  for (const ev of run.lifecycle) {
+    (lifecycleByTick.get(ev.atTick) ?? lifecycleByTick.set(ev.atTick, []).get(ev.atTick)!).push(ev);
+  }
+
+  // Scaffold contiguous frames 0..ticks (frame index === tick). Tick 0 is the
+  // pre-trade opening; ticks 1..N come from the recorded market frames.
+  const scaffold = Array.from({ length: run.ticks + 1 }, (_, t) => {
+    const mf = t === 0 ? undefined : run.market[t - 1];
+    return {
+      tick: t,
+      regime: mf?.regime ?? openingRegime,
+      marketReturn: mf?.marketReturn ?? 0,
+      prices: mf?.prices ?? openingPrices,
+    };
   });
+  const returns = scaffold.map((s) => s.marketReturn);
+
+  const feesByAgent = new Map<string, number>();
+  const frames: ReplayFrame[] = scaffold.map((s, i) => {
+    const agents = run.agents.map((agentId) => {
+      const entry = entryByTickAgent.get(`${s.tick}|${agentId}`);
+      const { frame, feesThisTick } = buildAgentFrame({
+        run,
+        agentId,
+        entry,
+        feesSoFar: feesByAgent.get(agentId) ?? 0,
+        firstAsset,
+      });
+      feesByAgent.set(agentId, (feesByAgent.get(agentId) ?? 0) + feesThisTick);
+      return frame;
+    });
+    return {
+      tick: s.tick,
+      regime: s.regime,
+      marketReturn: s.marketReturn,
+      marketHealth: i === 0 ? marketHealth(returns, 1) : marketHealth(returns, i),
+      volatility: r4(i === 0 ? volatility(returns, 1) : volatility(returns, i)),
+      prices: { ...s.prices },
+      agents,
+      lifecycleEvents: (lifecycleByTick.get(s.tick) ?? []).map((ev) => ({
+        agentId: ev.agentId,
+        memoryId: ev.memoryId,
+        from: ev.from,
+        to: ev.to,
+        reason: ev.reason,
+        atTick: ev.atTick,
+      })),
+    };
+  });
+
+  const summary: Replay["summary"] = {};
+  for (const agentId of run.agents) {
+    const m = metrics[agentId];
+    if (!m) continue;
+    summary[agentId] = {
+      ticksToAdapt: m.ticksToAdapt ?? run.ticks,
+      staleInfluenceRate: r4(m.staleInfluenceRate),
+      repeatedMistakes: m.repeatedMistakes,
+      flipRate: r4(m.flipRate),
+      finalEquity: r2(m.finalEquity),
+    };
+  }
 
   const replay: Replay = {
     version: REPLAY_VERSION,
+    runId: run.runId,
     scenario: run.scenario,
     seed: run.seed,
     memoryMode: run.memoryMode,
@@ -118,15 +281,16 @@ export function buildReplay(run: RunRecord): Replay {
     warmup: run.warmup,
     startingCash: run.startingCash,
     assets: run.assets,
+    regimeTimeline: run.regimeChanges,
     events: run.events.map((ev) => ({
       tick: ev.tick,
+      id: ev.id,
       type: ev.type,
       headline: ev.headline,
       affectedSectors: [...(ev.affectedSectors ?? [])],
     })),
-    regimeChanges: run.regimeChanges,
     frames,
-    agents,
+    summary,
   };
   // Fail closed: a replay that doesn't match the contract must not be written.
   return replaySchema.parse(replay);

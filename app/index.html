@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<title>Memory Arena</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;background:#0e0f11;color:#eceef1;font-family:'IBM Plex Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow:hidden}
+a{color:#eceef1}a:hover{color:#ffffff}
+@keyframes toastIn{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:none}}
+</style>
+</helmet>
+<div style="height:100vh;display:grid;grid-template-rows:68px minmax(0,1fr) 112px;background:#0e0f11">
+
+  <header style="display:flex;align-items:center;justify-content:space-between;gap:24px;padding:0 24px;min-width:0;border-bottom:1px solid #22252a">
+    <div style="display:flex;align-items:baseline;gap:16px;min-width:0">
+      <div style="font-size:22px;font-weight:700;letter-spacing:-0.01em;white-space:nowrap">Memory Arena</div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:14px;color:#9aa0a8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ runLabel }}</div>
+    </div>
+    <sc-if value="{{ hasEvent }}" hint-placeholder-val="{{ false }}">
+      <div title="{{ eventHeadline }}" style="flex:1 1 0;min-width:0;display:flex;align-items:center;gap:10px;padding:7px 14px;background:#17191c;border:1px solid #3a3e45;border-radius:10px;white-space:nowrap;overflow:hidden">
+        <span style="width:9px;height:9px;transform:rotate(45deg);border:2px solid #eceef1;flex-shrink:0"></span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#9aa0a8;flex-shrink:0">{{ eventMeta }}</span>
+        <span style="font-size:16px;overflow:hidden;text-overflow:ellipsis">{{ eventHeadline }}</span>
+      </div>
+    </sc-if>
+    <div style="display:flex;gap:4px;padding:4px;background:#17191c;border:1px solid #2a2d33;border-radius:12px">
+      <sc-for list="{{ modes }}" as="m" hint-placeholder-count="3">
+        <button onClick="{{ m.select }}" style="font:inherit;font-size:15px;font-weight:600;padding:9px 16px;border-radius:9px;border:none;cursor:pointer;white-space:nowrap;background:{{ m.bg }};color:{{ m.fg }}">{{ m.label }}</button>
+      </sc-for>
+    </div>
+  </header>
+
+  <div style="display:flex;min-height:0">
+    <aside style="width:{{ leftW }};flex-shrink:0;border-right:1px solid #22252a;background:#121316;display:flex;flex-direction:column;min-height:0;transition:width .25s ease">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 14px 10px 18px">
+        <sc-if value="{{ leftOpen }}" hint-placeholder-val="{{ true }}"><div style="font-size:13px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#9aa0a8">Equity</div></sc-if>
+        <button onClick="{{ toggleLeft }}" title="Toggle panel" style="font:inherit;font-size:16px;width:30px;height:30px;border-radius:8px;border:1px solid #2a2d33;background:#17191c;color:#c9cdd3;cursor:pointer">{{ leftIcon }}</button>
+      </div>
+      <sc-if value="{{ leftOpen }}" hint-placeholder-val="{{ true }}">
+        <div style="padding:0 18px 18px;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;gap:18px">
+          <svg viewBox="0 0 300 170" preserveAspectRatio="none" style="width:100%;height:170px;display:block;background:#0e0f11;border:1px solid #22252a;border-radius:10px">
+            <line x1="0" x2="300" y1="{{ chart.baseY }}" y2="{{ chart.baseY }}" stroke="#3a3e45" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"></line>
+            <sc-for list="{{ chart.regimes }}" as="r" hint-placeholder-count="2">
+              <line x1="{{ r.x }}" x2="{{ r.x }}" y1="0" y2="170" stroke="#2c3036" vector-effect="non-scaling-stroke"></line>
+            </sc-for>
+            <sc-for list="{{ chart.lines }}" as="l" hint-placeholder-count="7">
+              <polyline points="{{ l.full }}" fill="none" stroke="#ffffff" stroke-opacity="0.12" stroke-width="1.5" vector-effect="non-scaling-stroke"></polyline>
+              <polyline points="{{ l.done }}" fill="none" stroke="#ffffff" stroke-opacity="{{ l.op }}" stroke-width="{{ l.sw }}" vector-effect="non-scaling-stroke"></polyline>
+            </sc-for>
+            <line x1="{{ chart.cursorX }}" x2="{{ chart.cursorX }}" y1="0" y2="170" stroke="#eceef1" stroke-opacity="0.5" vector-effect="non-scaling-stroke"></line>
+          </svg>
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <div style="font-size:13px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#9aa0a8;padding-bottom:8px">Leaderboard · net P&amp;L</div>
+            <sc-for list="{{ leaderboard }}" as="r" hint-placeholder-count="7">
+              <div onMouseEnter="{{ r.enter }}" onMouseLeave="{{ r.leave }}" style="display:grid;grid-template-columns:26px minmax(0,1fr) auto;align-items:baseline;gap:8px;padding:8px 10px;border-radius:8px;background:{{ r.bg }}">
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:14px;color:#7d838c">{{ r.rank }}</span>
+                <span style="font-size:17px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.label }}</span>
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:500;color:{{ r.color }}">{{ r.net }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+    </aside>
+
+    <main ref="{{ arenaRef }}" style="position:relative;flex:1;min-width:0;overflow:hidden">
+      <canvas ref="{{ canvasRef }}" style="position:absolute;inset:0;width:100%;height:100%;display:block"></canvas>
+
+      <div style="position:absolute;left:{{ rd.left }};top:{{ rd.top }};transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:2px;pointer-events:none;color:#0b0c0e;text-align:center;white-space:nowrap">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:{{ rd.small }};font-weight:600;letter-spacing:0.06em">TICK {{ tickLabel }}</span>
+        <span style="font-size:{{ rd.big }};font-weight:700;line-height:1.05;text-transform:uppercase;letter-spacing:0.02em">{{ regimeLabel }}</span>
+        <div style="display:flex;align-items:baseline;gap:6px;margin-top:4px;padding:3px 10px;border-radius:999px;background:rgba(11,12,14,0.14);font-family:'IBM Plex Mono',monospace;font-size:{{ rd.tick }};max-width:{{ rd.maxW }};overflow:hidden">
+          <span style="font-weight:700">{{ ticker.symbol }}</span>
+          <span style="font-weight:500">{{ ticker.price }}</span>
+          <span style="font-weight:700">{{ ticker.change }}</span>
+        </div>
+        <sc-if value="{{ rd.showHealth }}" hint-placeholder-val="{{ true }}">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:{{ rd.small }};font-weight:500;max-width:{{ rd.maxW }};overflow:hidden;text-overflow:ellipsis">{{ healthLabel }}</span>
+        </sc-if>
+      </div>
+
+
+      <div style="position:absolute;top:20px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;z-index:5">
+        <sc-for list="{{ toasts }}" as="t" hint-placeholder-count="0">
+          <div style="display:flex;align-items:center;gap:12px;padding:12px 18px;background:#f4f5f7;color:#0e0f11;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,0.45);font-size:18px;animation:toastIn .35s ease;max-width:640px">
+            <span style="width:10px;height:10px;border-radius:50%;background:oklch(0.6 0.2 25);flex-shrink:0"></span>
+            <span><b style="font-weight:700">{{ t.agent }}</b> — {{ t.verb }}: {{ t.reason }}</span>
+          </div>
+        </sc-for>
+      </div>
+
+      <sc-for list="{{ agentViews }}" as="a" hint-placeholder-count="7">
+        <div onMouseEnter="{{ a.enter }}" onMouseLeave="{{ a.leave }}" style="position:absolute;left:{{ a.left }};top:{{ a.top }};width:{{ a.size }};height:{{ a.size }};transform:translate(-50%,-50%);border-radius:50%;cursor:pointer">
+          <div style="position:absolute;left:{{ a.lx }};top:{{ a.ly }};transform:{{ a.ltf }};display:flex;flex-direction:column;align-items:{{ a.lal }};gap:4px;pointer-events:none">
+            <div style="white-space:nowrap;font-size:{{ a.font }};font-weight:600;padding:4px 11px;border-radius:999px;background:rgba(14,15,17,0.78);border:1px solid {{ a.border }};color:{{ a.statusColor }}">{{ a.status }}</div>
+            <div style="white-space:nowrap;font-family:'IBM Plex Mono',monospace;font-size:14px;color:#9aa0a8;padding:0 4px">{{ a.label }}</div>
+          </div>
+        </div>
+      </sc-for>
+
+      <sc-if value="{{ hasCard }}" hint-placeholder-val="{{ false }}">
+        <div onMouseEnter="{{ card.enter }}" onMouseLeave="{{ card.leave }}" style="position:absolute;left:{{ card.left }};top:{{ card.top }};width:250px;max-height:{{ card.maxH }};overflow:auto;background:rgba(23,25,28,0.97);border:1px solid #33373e;border-radius:12px;box-shadow:0 10px 28px rgba(0,0,0,0.5);padding:10px 12px;display:flex;flex-direction:column;gap:8px;z-index:4">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
+            <div style="font-size:16px;font-weight:700">{{ card.name }}</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9aa0a8">conf {{ card.conf }}</div>
+          </div>
+          <div style="display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:12px">
+            <sc-for list="{{ card.rows }}" as="r" hint-placeholder-count="7">
+              <span style="color:#9aa0a8">{{ r.k }}</span>
+              <span style="font-family:'IBM Plex Mono',monospace;text-align:right;color:{{ r.color }}">{{ r.v }}</span>
+            </sc-for>
+            <span style="color:#9aa0a8">Holdings</span>
+            <span style="font-family:'IBM Plex Mono',monospace;text-align:right">{{ card.holdings }}</span>
+          </div>
+          <div style="font-size:12px;line-height:1.4;color:#c9cdd3;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden" title="{{ card.reasoning }}">{{ card.reasoning }}</div>
+          <sc-for list="{{ card.mems }}" as="m" hint-placeholder-count="1">
+            <div style="display:flex;flex-direction:column;gap:3px;padding:6px 8px;background:#101114;border:1px solid #26292e;border-radius:8px;opacity:{{ m.op }}">
+              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;padding:1px 6px;border-radius:999px;border:1px solid {{ m.badgeBorder }};color:{{ m.badgeColor }}">{{ m.status }}</span>
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#9aa0a8">rel {{ m.rel }} · score {{ m.score }}</span>
+              </div>
+              <span style="font-size:12px;line-height:1.35;text-decoration:{{ m.deco }}">{{ m.content }}</span>
+              <sc-if value="{{ m.hasReason }}" hint-placeholder-val="{{ false }}">
+                <span style="font-size:11px;color:{{ m.reasonColor }}">{{ m.reason }}</span>
+              </sc-if>
+            </div>
+          </sc-for>
+          <sc-if value="{{ card.hasCf }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 8px;border:1px dashed #3a3e45;border-radius:8px;font-size:12px">
+              <span>No memory: <b>{{ card.cfStatus }}</b></span>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;padding:2px 6px;border-radius:5px;background:{{ card.cfBg }};color:{{ card.cfFg }}">{{ card.cfLabel }}</span>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ loading }}" hint-placeholder-val="{{ true }}">
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:18px;color:#9aa0a8">{{ loadingText }}</div>
+      </sc-if>
+    </main>
+
+    <aside style="width:{{ rightW }};flex-shrink:0;border-left:1px solid #22252a;background:#121316;display:flex;flex-direction:column;min-height:0;transition:width .25s ease">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px 10px 14px">
+        <button onClick="{{ toggleRight }}" title="Toggle panel" style="font:inherit;font-size:16px;width:30px;height:30px;border-radius:8px;border:1px solid #2a2d33;background:#17191c;color:#c9cdd3;cursor:pointer">{{ rightIcon }}</button>
+        <sc-if value="{{ rightOpen }}" hint-placeholder-val="{{ true }}"><div style="font-size:13px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#9aa0a8">Run metrics · {{ modeLabel }}</div></sc-if>
+      </div>
+      <sc-if value="{{ rightOpen }}" hint-placeholder-val="{{ true }}">
+        <div style="padding:0 18px 18px;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;gap:14px">
+          <div style="display:grid;grid-template-columns:minmax(0,1.5fr) repeat(4,minmax(0,1fr));font-size:15px">
+            <span style="font-size:12px;color:#9aa0a8;padding:6px 0;border-bottom:1px solid #2a2d33">Agent</span>
+            <span style="font-size:12px;color:#9aa0a8;padding:6px 0;border-bottom:1px solid #2a2d33;text-align:right">Adapt*</span>
+            <span style="font-size:12px;color:#9aa0a8;padding:6px 0;border-bottom:1px solid #2a2d33;text-align:right">Stale*</span>
+            <span style="font-size:12px;color:#9aa0a8;padding:6px 0;border-bottom:1px solid #2a2d33;text-align:right">Repeat*</span>
+            <span style="font-size:12px;color:#9aa0a8;padding:6px 0;border-bottom:1px solid #2a2d33;text-align:right">Flip</span>
+            <sc-for list="{{ metrics }}" as="r" hint-placeholder-count="7">
+              <span style="padding:9px 0;border-bottom:1px solid #1e2125;font-weight:{{ r.fw }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.label }}</span>
+              <span style="padding:9px 0;border-bottom:1px solid #1e2125;text-align:right;font-family:'IBM Plex Mono',monospace;font-weight:{{ r.fw }}">{{ r.adapt }}</span>
+              <span style="padding:9px 0;border-bottom:1px solid #1e2125;text-align:right;font-family:'IBM Plex Mono',monospace;font-weight:{{ r.fw }}">{{ r.stale }}</span>
+              <span style="padding:9px 0;border-bottom:1px solid #1e2125;text-align:right;font-family:'IBM Plex Mono',monospace;font-weight:{{ r.fw }}">{{ r.repeat }}</span>
+              <span style="padding:9px 0;border-bottom:1px solid #1e2125;text-align:right;font-family:'IBM Plex Mono',monospace;font-weight:{{ r.fw }}">{{ r.flip }}</span>
+            </sc-for>
+          </div>
+          <div style="font-size:13px;line-height:1.5;color:#9aa0a8;text-wrap:pretty">* Lower is better. Adapt = ticks after the regime change until the agent reverses or halves its size in the affected sector. Stale = share of post-change decisions driven by a lesson from the old regime. Repeat = losing trades citing a memory after its first loss. Flip = share of memory-fired decisions whose action changes when memories are withheld.</div>
+          <div style="display:flex;flex-direction:column;gap:6px;padding-top:6px">
+            <div style="font-size:13px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#9aa0a8">Mode averages</div>
+            <div style="display:grid;grid-template-columns:minmax(0,1.5fr) repeat(4,minmax(0,1fr));font-size:15px">
+              <span style="font-size:12px;color:#9aa0a8;padding:6px 0;border-bottom:1px solid #2a2d33">Mode</span>
+              <span style="font-size:12px;color:#9aa0a8;padding:6px 0;border-bottom:1px solid #2a2d33;text-align:right">Equity</span>
+              <span style="font-size:12px;color:#9aa0a8;padding:6px 0;border-bottom:1px solid #2a2d33;text-align:right">Adapt</span>
+              <span style="font-size:12px;color:#9aa0a8;padding:6px 0;border-bottom:1px solid #2a2d33;text-align:right">Stale</span>
+              <span style="font-size:12px;color:#9aa0a8;padding:6px 0;border-bottom:1px solid #2a2d33;text-align:right">Repeat</span>
+              <sc-for list="{{ modeAvg }}" as="r" hint-placeholder-count="3">
+                <span style="padding:9px 0;border-bottom:1px solid #1e2125;color:{{ r.color }};font-weight:{{ r.fw }}">{{ r.label }}</span>
+                <span style="padding:9px 0;border-bottom:1px solid #1e2125;text-align:right;font-family:'IBM Plex Mono',monospace;color:{{ r.color }}">{{ r.equity }}</span>
+                <span style="padding:9px 0;border-bottom:1px solid #1e2125;text-align:right;font-family:'IBM Plex Mono',monospace;color:{{ r.color }}">{{ r.adapt }}</span>
+                <span style="padding:9px 0;border-bottom:1px solid #1e2125;text-align:right;font-family:'IBM Plex Mono',monospace;color:{{ r.color }}">{{ r.stale }}</span>
+                <span style="padding:9px 0;border-bottom:1px solid #1e2125;text-align:right;font-family:'IBM Plex Mono',monospace;color:{{ r.color }}">{{ r.repeat }}</span>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+    </aside>
+  </div>
+
+  <footer style="display:flex;align-items:center;gap:20px;padding:0 24px;border-top:1px solid #22252a;background:#121316">
+    <button onClick="{{ togglePlay }}" title="Space" style="font:inherit;font-size:16px;font-weight:600;width:104px;height:48px;border-radius:12px;border:none;background:#eceef1;color:#0e0f11;cursor:pointer;flex-shrink:0">{{ playLabel }}</button>
+    <div style="display:flex;gap:2px;padding:3px;background:#17191c;border:1px solid #2a2d33;border-radius:10px;flex-shrink:0">
+      <sc-for list="{{ speeds }}" as="s" hint-placeholder-count="4">
+        <button onClick="{{ s.select }}" style="font-family:'IBM Plex Mono',monospace;font-size:14px;padding:7px 10px;border-radius:7px;border:none;cursor:pointer;background:{{ s.bg }};color:{{ s.fg }}">{{ s.label }}</button>
+      </sc-for>
+    </div>
+    <div style="position:relative;flex:1;min-width:0;height:72px">
+      <sc-for list="{{ regimeMarks }}" as="r" hint-placeholder-count="2">
+        <div style="position:absolute;left:{{ r.left }};top:2px;bottom:24px;display:flex;flex-direction:column;align-items:flex-start;pointer-events:none">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#c9cdd3;padding-left:6px;white-space:nowrap">{{ r.label }}</span>
+          <div style="position:absolute;left:0;top:0;bottom:0;width:2px;background:#6b7079"></div>
+        </div>
+      </sc-for>
+      <div style="position:absolute;left:0;right:0;top:42px;height:6px;background:#2a2d33;border-radius:3px">
+        <div style="height:100%;width:{{ progress }};background:#eceef1;border-radius:3px"></div>
+      </div>
+      <sc-for list="{{ eventMarks }}" as="e" hint-placeholder-count="1">
+        <div title="{{ e.title }}" style="position:absolute;left:{{ e.left }};top:39px;width:12px;height:12px;margin-left:-6px;transform:rotate(45deg);background:#0e0f11;border:2px solid #eceef1;z-index:2"></div>
+      </sc-for>
+      <sc-for list="{{ lcMarks }}" as="e" hint-placeholder-count="0">
+        <div title="{{ e.title }}" style="position:absolute;left:{{ e.left }};top:56px;width:6px;height:6px;margin-left:-3px;border-radius:50%;background:oklch(0.68 0.17 25)"></div>
+      </sc-for>
+      <div style="position:absolute;left:{{ progress }};top:36px;width:18px;height:18px;margin-left:-9px;border-radius:50%;background:#ffffff;box-shadow:0 0 0 4px rgba(255,255,255,0.15);pointer-events:none;z-index:3"></div>
+      <input type="range" min="0" max="{{ maxTick }}" step="1" value="{{ tick }}" onChange="{{ onScrub }}" style="position:absolute;left:-9px;right:-9px;top:28px;height:34px;width:calc(100% + 18px);margin:0;opacity:0;cursor:pointer;z-index:4">
+    </div>
+    <div title="live run not connected" style="display:flex;align-items:center;gap:10px;flex-shrink:0;cursor:not-allowed;opacity:0.45">
+      <div style="width:40px;height:22px;border-radius:11px;background:#2a2d33;position:relative"><div style="position:absolute;left:3px;top:3px;width:16px;height:16px;border-radius:50%;background:#7d838c"></div></div>
+      <span style="font-size:15px;font-weight:600">Live</span>
+    </div>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;defaultMode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;none&quot;,&quot;raw&quot;,&quot;governed&quot;],&quot;default&quot;:&quot;governed&quot;,&quot;tsType&quot;:&quot;'none'|'raw'|'governed'&quot;},&quot;autoplay&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;motion&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;min&quot;:0.3,&quot;max&quot;:1.5,&quot;step&quot;:0.1,&quot;default&quot;:1,&quot;tsType&quot;:&quot;number&quot;}}">
+const AGENTS = ['momentum','contrarian','conservative','aggressive','adaptive','breakout','dip_buyer'];
+const LABEL = {momentum:'Momentum',contrarian:'Contrarian',conservative:'Conservative',aggressive:'Aggressive',adaptive:'Adaptive',breakout:'Breakout',dip_buyer:'Dip buyer'};
+const HEALTH = {good:[46,196,118], bad:[232,82,82], neutral:[70,138,255]};
+const MODES = [{id:'none',label:'No Memory'},{id:'raw',label:'Raw Memory'},{id:'governed',label:'Governed Memory'}];
+const GAIN = 'oklch(0.80 0.15 150)', LOSS = 'oklch(0.72 0.17 25)', AMBER = 'oklch(0.84 0.12 80)';
+const TICK_MS = 650;
+const money = (v, signed) => (signed && v > 0 ? '+' : v < 0 ? '−' : '') + '$' + Math.abs(v).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const pnlColor = v => v > 0.005 ? GAIN : v < -0.005 ? LOSS : '#eceef1';
+const pct = v => (v * 100).toFixed(0) + '%';
+
+class Component extends DCLogic {
+  state = { mode: this.props.defaultMode ?? 'governed', cache: {}, tick: 0, playing: false, speed: 1, hover: null, leftOpen: window.innerWidth >= 1400, rightOpen: window.innerWidth >= 1400, toasts: [], w: 900, h: 600, err: null };
+  arenaRef = React.createRef();
+  canvasRef = React.createRef();
+  anim = { color: null, pulse: 0, lastRegime: null, flash: {}, lines: {}, vol: 0.3, phM: 0, phA: 0, phL: 0, last: 0, acc: 0 };
+
+  componentDidMount() {
+    this.loadAll();
+    this.ro = new ResizeObserver(([e]) => { const r = e.contentRect; this.setState({ w: r.width, h: r.height }); });
+    if (this.arenaRef.current) this.ro.observe(this.arenaRef.current);
+    this.onKey = e => {
+      if (e.target && e.target.tagName === 'INPUT' && e.target.type !== 'range') return;
+      if (e.code === 'Space') { e.preventDefault(); this.togglePlay(); }
+      if (e.code === 'ArrowRight') this.setTick(this.state.tick + 1);
+      if (e.code === 'ArrowLeft') this.setTick(this.state.tick - 1);
+    };
+    window.addEventListener('keydown', this.onKey);
+    this.raf = requestAnimationFrame(this.loop);
+    this.tickerT = setInterval(() => this.setState(s => ({ tickerIdx: (s.tickerIdx || 0) + 1 })), 2200);
+  }
+  componentWillUnmount() { clearInterval(this.tickerT); cancelAnimationFrame(this.raf); this.ro && this.ro.disconnect(); window.removeEventListener('keydown', this.onKey); }
+
+  async fetchMode(mode) {
+    for (const url of [`./replay-${mode}.json`, `./sample/replay-${mode}.json`]) {
+      try { const r = await fetch(url); if (!r.ok) continue; const d = await r.json(); if (d && d.frames) return d; } catch (e) {}
+    }
+    return null;
+  }
+  async loadAll() {
+    const first = this.state.mode;
+    const d = await this.fetchMode(first);
+    if (!d) { this.setState({ err: 'No replay file found' }); return; }
+    this.setState(s => ({ cache: { ...s.cache, [first]: this.prep(d) }, playing: this.props.autoplay ?? false }));
+    for (const m of MODES) if (m.id !== first) {
+      const x = await this.fetchMode(m.id);
+      if (x) this.setState(s => ({ cache: { ...s.cache, [m.id]: this.prep(x) } }));
+    }
+  }
+  prep(d) {
+    const lc = {};
+    d.frames.forEach(f => (f.lifecycleEvents || []).forEach(e => { (lc[e.agentId + '|' + e.memoryId] = lc[e.agentId + '|' + e.memoryId] || []).push(e); }));
+    let min = Infinity, max = -Infinity;
+    d.frames.forEach(f => f.agents.forEach(a => { min = Math.min(min, a.portfolio.equity); max = Math.max(max, a.portfolio.equity); }));
+    const start = d.frames[0]?.agents[0]?.portfolio.startingCash ?? 100000;
+    min = Math.min(min, start); max = Math.max(max, start);
+    const pad = (max - min) * 0.08 || 1; min -= pad; max += pad;
+    const n = d.frames.length - 1 || 1;
+    const X = t => (t / n * 300).toFixed(1), Y = v => (170 - (v - min) / (max - min) * 170).toFixed(1);
+    const pts = {};
+    AGENTS.forEach(id => { pts[id] = d.frames.map(f => { const a = f.agents.find(x => x.agentId === id); return a ? X(f.tick) + ',' + Y(a.portfolio.equity) : null; }).filter(Boolean); });
+    return { d, lc, pts, baseY: Y(start), X };
+  }
+
+  get data() { return this.state.cache[this.state.mode]; }
+  setTick(t) { const p = this.data; if (!p) return; this.setState({ tick: Math.max(0, Math.min(p.d.frames.length - 1, t)) }); }
+  togglePlay = () => {
+    const p = this.data; if (!p) return;
+    if (!this.state.playing && this.state.tick >= p.d.frames.length - 1) this.setState({ tick: 0, playing: true });
+    else this.setState(s => ({ playing: !s.playing }));
+  };
+
+  componentDidUpdate(_, prev) {
+    const p = this.data;
+    if (p && prev.tick !== this.state.tick) {
+      const f = p.d.frames[this.state.tick];
+      const evs = (f && f.lifecycleEvents) || [];
+      if (evs.length) {
+        evs.forEach(e => { this.anim.flash[e.agentId] = 1; });
+        const toastable = evs.filter(e => e.to === 'invalidated' || e.to === 'superseded');
+        if (toastable.length) {
+          const add = toastable.map(e => ({ key: Math.random().toString(36).slice(2), agent: LABEL[e.agentId] || e.agentId, verb: e.to === 'superseded' ? 'lesson superseded' : 'lesson invalidated', reason: e.reason }));
+          this.setState(s => ({ toasts: [...s.toasts, ...add].slice(-3) }));
+          add.forEach(t => setTimeout(() => this.setState(s => ({ toasts: s.toasts.filter(x => x.key !== t.key) })), 4500));
+        }
+      }
+    }
+  }
+
+  layout() {
+    const { w, h } = this.state;
+    const m = Math.min(w, h);
+    const rA = Math.max(18, Math.min(36, m * 0.04));
+    const big = m > 640;
+    // labels (pill + name) sit above the top agent and beside every other agent, outward
+    const lab = big ? 72 : 60, side = big ? 210 : 170;
+    const top = lab + rA * 1.2 + 8, bottom = Math.max(rA * 1.2, lab / 2) + 10;
+    const vs = 1.12; // vertical stretch: pushes top/bottom agents further from the market
+    const ring = Math.max(60, Math.min((h - top - bottom) / (1.9 * vs), (w / 2 - rA - side) / 0.97));
+    const cy = top + ring * vs, cx = w / 2;
+    const s = Math.max(1, Math.min(1.3, (w / 2 - rA - side) / (ring * 0.97)));
+    const R = Math.min(m * 0.22, ring * 0.56);
+    const pos = AGENTS.map((id, i) => { const th = -Math.PI / 2 + i * 2 * Math.PI / AGENTS.length; return { id, x: cx + Math.cos(th) * ring * s, y: cy + Math.sin(th) * ring * vs }; });
+    return { cx, cy, R, rA, pos, big };
+  }
+
+  loop = ts => {
+    this.raf = requestAnimationFrame(this.loop);
+    const A = this.anim;
+    const dt = Math.min(0.1, A.last ? (ts - A.last) / 1000 : 0.016); A.last = ts;
+    const p = this.data;
+    if (p && this.state.playing) {
+      A.acc += dt * 1000 * this.state.speed;
+      if (A.acc >= TICK_MS) { A.acc = 0; const nt = this.state.tick + 1; if (nt >= p.d.frames.length) this.setState({ playing: false }); else this.setState({ tick: nt }); }
+    }
+    this.draw(dt);
+  };
+
+  blob(ctx, cx, cy, R, ph, seed, amp) {
+    ctx.beginPath();
+    for (let i = 0; i <= 90; i++) {
+      const th = i / 90 * Math.PI * 2;
+      const r = R * (1 + amp * (0.55 * Math.sin(3 * th + ph * 0.4 + seed) + 0.35 * Math.sin(5 * th - ph * 0.31 + seed * 2) + 0.22 * Math.sin(2 * th + ph * 0.23 + seed * 3)));
+      const x = cx + Math.cos(th) * r, y = cy + Math.sin(th) * r;
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    }
+    ctx.closePath();
+  }
+
+  draw(dt) {
+    const c = this.canvasRef.current; if (!c) return;
+    const { w, h } = this.state, dpr = window.devicePixelRatio || 1;
+    if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+    const ctx = c.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
+    const p = this.data; if (!p) return;
+    const f = p.d.frames[this.state.tick]; if (!f) return;
+    const A = this.anim, motion = this.props.motion ?? 1;
+    const { cx, cy, R, rA, pos } = this.layout();
+
+    const target = HEALTH[f.marketHealth] || HEALTH.neutral;
+    if (!A.color) A.color = target.slice();
+    const k = 1 - Math.exp(-dt / 0.33);
+    A.color = A.color.map((v, i) => v + (target[i] - v) * k);
+    if (A.lastRegime && A.lastRegime !== f.regime) A.pulse = 1;
+    A.lastRegime = f.regime;
+    A.pulse *= Math.exp(-dt / 0.9);
+    const volT = Math.max(0.12, Math.min(1, (f.volatility || 0) / 0.032));
+    A.vol += (volT - A.vol) * (1 - Math.exp(-dt / 0.8));
+    A.phM += dt * 0.9 * motion;
+    A.phA += dt * (0.35 + 2.2 * A.vol) * motion;
+    A.phL += dt * motion;
+    const [r, g, b] = A.color.map(Math.round);
+    const col = a => `rgba(${r},${g},${b},${a})`;
+
+    // aura
+    for (let j = 0; j < 2; j++) {
+      const base = R * (1.3 + j * 0.16), amp = (0.015 + 0.06 * A.vol) * (1 + A.pulse * 1.5);
+      ctx.beginPath();
+      for (let i = 0; i <= 120; i++) {
+        const th = i / 120 * Math.PI * 2;
+        const rr = base * (1 + amp * (0.6 * Math.sin(6 * th + A.phA * (1 + j * 0.3)) + 0.4 * Math.sin(9 * th - A.phA * 1.3 + j)));
+        const x = cx + Math.cos(th) * rr, y = cy + Math.sin(th) * rr; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      }
+      ctx.closePath(); ctx.strokeStyle = col((j ? 0.22 : 0.45) + A.pulse * 0.4); ctx.lineWidth = j ? 1.5 : 2.5; ctx.stroke();
+    }
+    if (A.pulse > 0.02) {
+      ctx.beginPath(); ctx.arc(cx, cy, R * 1.3 * (1 + 0.75 * (1 - A.pulse)), 0, Math.PI * 2);
+      ctx.strokeStyle = col(A.pulse * 0.9); ctx.lineWidth = 2 + 4 * A.pulse; ctx.stroke();
+    }
+    // market blob
+    const breath = 1 + 0.018 * Math.sin(A.phM * 1.1);
+    const grd = ctx.createRadialGradient(cx - R * 0.3, cy - R * 0.35, R * 0.1, cx, cy, R * 1.15);
+    grd.addColorStop(0, `rgba(${Math.min(255, r + 70)},${Math.min(255, g + 70)},${Math.min(255, b + 70)},1)`);
+    grd.addColorStop(1, col(0.95));
+    ctx.save(); ctx.shadowColor = col(0.55); ctx.shadowBlur = 60;
+    this.blob(ctx, cx, cy, R * breath, A.phM, 0.4, 0.075); ctx.fillStyle = grd; ctx.fill(); ctx.restore();
+
+    // lines
+    const hover = this.state.hover;
+    f.agents.forEach(a => {
+      const L = A.lines[a.agentId] = A.lines[a.agentId] || { alpha: 0, style: 'straight', kind: 'buy' };
+      if (a.interaction) { L.style = a.interaction.style; L.kind = a.interaction.kind; }
+      L.alpha += ((a.interaction ? 1 : 0) - L.alpha) * (1 - Math.exp(-dt / 0.25));
+    });
+    pos.forEach(P => {
+      const L = A.lines[P.id]; if (!L || L.alpha < 0.02) return;
+      const dx = cx - P.x, dy = cy - P.y, d = Math.hypot(dx, dy), ux = dx / d, uy = dy / d, nx = -uy, ny = ux;
+      const sx = P.x + ux * rA * 1.25, sy = P.y + uy * rA * 1.25, ex = cx - ux * R * 1.15, ey = cy - uy * R * 1.15;
+      const len = Math.hypot(ex - sx, ey - sy);
+      const off = s => {
+        const taper = Math.sqrt(Math.sin(Math.PI * s));
+        if (L.style === 'zigzag') { const segs = Math.max(5, Math.round(len / 24)); const u = s * segs + 0.25; return 9 * (2 * Math.abs(2 * (u - Math.floor(u)) - 1) - 1) * taper; }
+        if (L.style === 'wavy') return 7 * Math.sin(s * len / 36 * Math.PI * 2 - A.phL * 3) * taper;
+        return 0;
+      };
+      const at = s => { const o = off(s); return [sx + (ex - sx) * s + nx * o, sy + (ey - sy) * s + ny * o]; };
+      const emph = hover && hover !== P.id ? 0.35 : 1;
+      ctx.save(); ctx.globalAlpha = L.alpha * emph;
+      ctx.strokeStyle = 'rgba(236,238,241,0.85)'; ctx.lineWidth = 2.5; ctx.lineJoin = 'miter';
+      if (L.style === 'dashed') { ctx.setLineDash([12, 10]); ctx.lineDashOffset = (L.kind === 'buy' ? -1 : 1) * A.phL * 24; }
+      ctx.beginPath();
+      const steps = L.style === 'zigzag' ? Math.max(40, Math.round(len / 3)) : 60;
+      for (let i = 0; i <= steps; i++) { const [x, y] = at(i / steps); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+      ctx.stroke(); ctx.setLineDash([]);
+      for (let kk = 0; kk < 3; kk++) {
+        let s = (A.phL * 0.45 + kk / 3) % 1; if (L.kind === 'sell') s = 1 - s;
+        const [x, y] = at(s), fade = Math.min(1, Math.sin(Math.PI * s) * 2.5);
+        ctx.globalAlpha = L.alpha * emph * fade; ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2);
+        if (L.kind === 'buy') { ctx.fillStyle = '#ffffff'; ctx.fill(); } else { ctx.fillStyle = '#0e0f11'; ctx.fill(); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.stroke(); }
+      }
+      ctx.restore();
+    });
+
+    // agent blobs
+    pos.forEach((P, i) => {
+      const fl = A.flash[P.id] || 0;
+      if (fl > 0.01) {
+        A.flash[P.id] = fl * Math.exp(-dt / 0.7);
+        ctx.save(); ctx.beginPath(); ctx.arc(P.x, P.y, rA * (1.3 + (1 - fl) * 0.9), 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(255,255,255,${fl * 0.85})`; ctx.lineWidth = 3; ctx.shadowColor = 'rgba(255,255,255,0.8)'; ctx.shadowBlur = 24 * fl; ctx.stroke(); ctx.restore();
+      }
+      this.blob(ctx, P.x, P.y, rA, A.phM * 0.8, i * 1.7, 0.09);
+      ctx.fillStyle = '#050506'; ctx.fill();
+      if (fl > 0.01) { ctx.fillStyle = `rgba(255,255,255,${fl * 0.35})`; ctx.fill(); }
+      ctx.strokeStyle = hover === P.id ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.3)'; ctx.lineWidth = hover === P.id ? 2.5 : 1.5; ctx.stroke();
+    });
+  }
+
+  hoverEnter(id) { clearTimeout(this.hoverT); this.setState({ hover: id }); }
+  hoverLeave() { clearTimeout(this.hoverT); this.hoverT = setTimeout(() => this.setState({ hover: null }), 180); }
+
+  renderVals() {
+    const S = this.state, p = this.data;
+    const modeLabel = (MODES.find(m => m.id === S.mode) || {}).label;
+    const base = {
+      arenaRef: this.arenaRef, canvasRef: this.canvasRef, modeLabel,
+      modes: MODES.map(m => ({ label: m.label, bg: m.id === S.mode ? '#eceef1' : 'transparent', fg: m.id === S.mode ? '#0e0f11' : '#c9cdd3', select: () => this.setState({ mode: m.id, hover: null }) })),
+      leftOpen: S.leftOpen, rightOpen: S.rightOpen, leftW: S.leftOpen ? '330px' : '58px', rightW: S.rightOpen ? '380px' : '58px',
+      leftIcon: S.leftOpen ? '‹' : '›', rightIcon: S.rightOpen ? '›' : '‹',
+      toggleLeft: () => this.setState(s => ({ leftOpen: !s.leftOpen })), toggleRight: () => this.setState(s => ({ rightOpen: !s.rightOpen })),
+      togglePlay: this.togglePlay, playLabel: S.playing ? '❚❚  Pause' : '▶  Play',
+      speeds: [0.5, 1, 2, 4].map(v => ({ label: v + '×', bg: S.speed === v ? '#eceef1' : 'transparent', fg: S.speed === v ? '#0e0f11' : '#c9cdd3', select: () => this.setState({ speed: v }) })),
+      toasts: S.toasts, loading: !p, loadingText: S.err || 'Loading replay…',
+    };
+    if (!p) return { ...base, runLabel: '', agentViews: [], hasCard: false, card: {}, chart: { lines: [], regimes: [] }, leaderboard: [], metrics: [], modeAvg: [], rd: { left: '50%', top: '50%', big: '0px', small: '0px', maxW: '0px', showHealth: false, tick: '0px' }, ticker: { symbol: '', price: '', change: '' }, regimeMarks: [], eventMarks: [], lcMarks: [], progress: '0%', maxTick: 0, tick: 0, tickLabel: '–', regimeLabel: '–', healthColor: '#555', healthLabel: '', hasEvent: false };
+
+    const d = p.d, n = d.frames.length - 1 || 1, tick = Math.min(S.tick, n), f = d.frames[tick];
+    const L = this.layout();
+    const byId = {}; f.agents.forEach(a => { byId[a.agentId] = a; });
+    const leftPct = t => (t / n * 100) + '%';
+
+    const agentViews = L.pos.map(P => {
+      const a = byId[P.id];
+      const dx = P.x - L.cx, isTop = Math.abs(dx) < 4;
+      const lp = isTop ? { lx: '50%', ly: '0', ltf: 'translate(-50%, calc(-100% - 8px))', lal: 'center' }
+        : dx > 0 ? { lx: 'calc(100% + 8px)', ly: '50%', ltf: 'translateY(-50%)', lal: 'flex-start' }
+        : { lx: '-8px', ly: '50%', ltf: 'translate(-100%, -50%)', lal: 'flex-end' };
+      return { ...lp, id: P.id, label: LABEL[P.id], status: a ? a.status : '—', left: P.x + 'px', top: P.y + 'px', size: L.rA * 2.4 + 'px',
+        font: L.big ? '18px' : '14px', statusColor: a && a.interaction ? '#ffffff' : '#9aa0a8', border: a && a.interaction ? '#5a5f68' : '#26292e',
+        enter: () => this.hoverEnter(P.id), leave: () => this.hoverLeave() };
+    });
+
+    let card = {}, hasCard = false;
+    if (S.hover && byId[S.hover]) {
+      hasCard = true;
+      const a = byId[S.hover], pf = a.portfolio, P = L.pos.find(x => x.id === S.hover);
+      // sit beside the blob, on the outward side (away from the market) when it fits
+      const cardW = 250, maxH = Math.max(180, Math.min(S.h - 24, 340)), gap = L.rA * 1.2 + 6;
+      const right = P.x >= L.cx;
+      const outL = right ? P.x + gap : P.x - gap - cardW, inL = right ? P.x - gap - cardW : P.x + gap;
+      let left = (outL >= 8 && outL + cardW <= S.w - 8) ? outL : inL;
+      left = Math.max(8, Math.min(S.w - cardW - 8, left));
+      const top = Math.max(8, Math.min(S.h - maxH - 8, P.y - maxH / 2));
+      const mems = (a.memories || []).slice().sort((x, y) => (y.fired - x.fired) || (y.retrievalScore - x.retrievalScore)).map(m => {
+        const evs = p.lc[a.agentId + '|' + m.id] || []; const ev = evs.filter(e => e.atTick <= tick).pop();
+        const dead = m.status === 'invalidated' || m.status === 'superseded' || m.status === 'expired';
+        const badge = m.status === 'active' ? ['#eceef1', '#5a5f68'] : m.status === 'under_review' ? [AMBER, AMBER] : m.status === 'invalidated' ? [LOSS, LOSS] : ['#9aa0a8', '#3a3e45'];
+        return { content: m.content, status: m.status.replace('_', ' ') + (m.fired ? ' · fired' : ''), rel: m.reliability.toFixed(2), score: m.retrievalScore.toFixed(2), created: m.createdAtTick,
+          deco: m.status === 'invalidated' ? 'line-through' : 'none', op: m.fired || m.status === 'invalidated' ? 1 : 0.6,
+          badgeColor: badge[0], badgeBorder: badge[1], hasReason: !!(ev && ev.reason), reason: ev ? `${ev.to.replace('_', ' ')} at t${ev.atTick}: ${ev.reason}` : '', reasonColor: m.status === 'invalidated' ? LOSS : '#9aa0a8' };
+      }).filter(m => m.op === 1 || true);
+      const cf = a.counterfactual;
+      card = {
+        name: LABEL[a.agentId] || a.agentId, strategy: a.strategy, conf: a.confidence.toFixed(2), confW: (a.confidence * 100) + '%',
+        rows: [
+          { k: 'Starting cash', v: money(pf.startingCash), color: '#eceef1' }, { k: 'Cash', v: money(pf.cash), color: '#eceef1' },
+          { k: 'Equity', v: money(pf.equity), color: '#eceef1' }, { k: 'Net P&L', v: money(pf.netPnl, true), color: pnlColor(pf.netPnl) },
+          { k: 'Realized P&L', v: money(pf.realizedPnl, true), color: pnlColor(pf.realizedPnl) }, { k: 'Unrealized P&L', v: money(pf.unrealizedPnl, true), color: pnlColor(pf.unrealizedPnl) },
+          { k: 'Fees paid', v: money(-pf.feesPaid), color: pf.feesPaid > 0 ? LOSS : '#eceef1' },
+        ],
+        holdings: (pf.holdings || []).length ? pf.holdings.map(h => `${h.symbol}: ${h.quantity}`).join(', ') : 'None',
+        reasoning: a.reasoning, mems, noMems: !mems.length, noMemsText: d.memoryMode === 'none' ? 'Memory disabled in this run.' : 'No memories retrieved this tick.',
+        hasCf: !!cf, cfStatus: cf ? cf.withoutMemory.status : '', cfLabel: cf && cf.changed ? 'CHANGED' : 'UNCHANGED',
+        cfBg: cf && cf.changed ? '#eceef1' : '#26292e', cfFg: cf && cf.changed ? '#0e0f11' : '#9aa0a8',
+        left: left + 'px', top: top + 'px', maxH: maxH + 'px', enter: () => this.hoverEnter(S.hover), leave: () => this.hoverLeave(),
+      };
+    }
+
+    const chart = {
+      baseY: p.baseY, cursorX: p.X(tick),
+      regimes: d.regimeTimeline.filter(r => r.tick > 0).map(r => ({ x: p.X(r.tick) })),
+      lines: AGENTS.map(id => ({ full: p.pts[id].join(' '), done: p.pts[id].slice(0, tick + 1).join(' '), op: S.hover ? (S.hover === id ? 1 : 0.25) : 0.7, sw: S.hover === id ? 3 : 1.75 })),
+    };
+    const leaderboard = f.agents.slice().sort((x, y) => y.portfolio.netPnl - x.portfolio.netPnl).map((a, i) => ({
+      rank: i + 1, label: LABEL[a.agentId] || a.agentId, net: money(a.portfolio.netPnl, true), color: pnlColor(a.portfolio.netPnl),
+      bg: S.hover === a.agentId ? '#1f2226' : 'transparent', enter: () => this.hoverEnter(a.agentId), leave: () => this.hoverLeave() }));
+
+    const sm = d.summary || {};
+    const metrics = AGENTS.filter(id => sm[id]).map(id => { const m = sm[id]; return { label: LABEL[id], adapt: m.ticksToAdapt, stale: pct(m.staleInfluenceRate), repeat: m.repeatedMistakes, flip: pct(m.flipRate), fw: S.hover === id ? 700 : 400 }; });
+    const mean = (o, k) => { const v = Object.values(o).map(x => x[k]); return v.reduce((a, b) => a + b, 0) / (v.length || 1); };
+    const modeAvg = MODES.filter(m => S.cache[m.id]).map(m => { const s = S.cache[m.id].d.summary || {}; const cur = m.id === S.mode;
+      return { label: m.label.replace(' Memory', ''), equity: '$' + (mean(s, 'finalEquity') / 1000).toFixed(1) + 'k', adapt: mean(s, 'ticksToAdapt').toFixed(1), stale: pct(mean(s, 'staleInfluenceRate')), repeat: mean(s, 'repeatedMistakes').toFixed(1), color: cur ? '#ffffff' : '#9aa0a8', fw: cur ? 600 : 400 }; });
+
+    const recent = d.events.filter(e => e.tick <= tick && tick - e.tick < 8).pop();
+    const lcAll = []; d.frames.forEach(fr => (fr.lifecycleEvents || []).forEach(e => { if (e.to === 'invalidated' || e.to === 'superseded') lcAll.push(e); }));
+
+    return { ...base,
+      runLabel: `${d.scenario} · seed ${d.seed} · ${d.ticks} ticks`,
+      ticker: (() => {
+        const as = d.assets || [], A = as[(S.tickerIdx || 0) % (as.length || 1)]; if (!A) return { symbol: '', price: '', change: '' };
+        const prev = d.frames[Math.max(0, tick - 1)].prices[A.symbol], cur = f.prices[A.symbol];
+        const ch = tick > 0 && prev ? (cur / prev - 1) * 100 : 0;
+        return { symbol: A.symbol, price: cur != null ? cur.toFixed(2) : '–', change: (ch > 0 ? '▲' : ch < 0 ? '▼' : '') + Math.abs(ch).toFixed(2) + '%' };
+      })(),
+      rd: { left: L.cx + 'px', top: L.cy + 'px', maxW: L.R * 1.6 + 'px', showHealth: L.R >= 80, tick: Math.round(Math.max(10, Math.min(15, L.R * 0.095))) + 'px',
+        big: Math.round(Math.min(L.R * 0.3, L.R * 1.6 / (Math.max(4, f.regime.length) * 0.66))) + 'px',
+        small: Math.round(Math.max(11, Math.min(16, L.R * 0.1))) + 'px' },
+      agentViews, hasCard, card, chart, leaderboard, metrics, modeAvg,
+      regimeMarks: d.regimeTimeline.map(r => ({ left: leftPct(r.tick), label: r.regime.replace('_', ' ') })),
+      eventMarks: d.events.map(e => ({ left: leftPct(e.tick), title: `t${e.tick} · ${e.headline}` })),
+      lcMarks: lcAll.map(e => ({ left: leftPct(e.atTick), title: `t${e.atTick} · ${LABEL[e.agentId]}: ${e.to} — ${e.reason}` })),
+      progress: leftPct(tick), maxTick: n, tick,
+      onScrub: e => this.setTick(+e.target.value),
+      tickLabel: `${tick} / ${n}`, regimeLabel: f.regime.replace('_', ' '),
+      healthColor: `rgb(${(HEALTH[f.marketHealth] || HEALTH.neutral).join(',')})`,
+      healthLabel: `${f.marketHealth} · vol ${(f.volatility * 100).toFixed(1)}%`,
+      hasEvent: !!recent, eventMeta: recent ? `t${recent.tick} · ${recent.type} · ${recent.affectedSectors.join(', ')}` : '', eventHeadline: recent ? recent.headline : '',
+    };
+  }
+}
+</script>
+</body>
+</html>
