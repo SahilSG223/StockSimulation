@@ -2,10 +2,12 @@ import type { MarketEngine } from "../simulation/market-engine.js";
 import type { ExecutionResult, PortfolioSnapshot } from "../simulation/types.js";
 import { decisionSchema, type AgentDecision } from "./decision-schema.js";
 import { observationSchema, type AgentObservation } from "./observation-schema.js";
+import { retrievedMemoriesSchema, type RetrievedMemory } from "../memory/vector-schema.js";
 
 export interface DecisionContext {
   observation: AgentObservation;
   previousObservation?: AgentObservation;
+  memories?: RetrievedMemory[];
 }
 
 /** A model adapter may use decisionSchema for native structured output. */
@@ -16,9 +18,10 @@ export interface DecisionRecord {
   decision: AgentDecision;
   results: ExecutionResult[];
   portfolioAfter: PortfolioSnapshot;
+  memories: RetrievedMemory[];
 }
 
-/** No-memory baseline. The caller registers the agent and advances the market. */
+/** Caller registers agents and advances time. Memory retrieval precedes model decisions. */
 export class AgentRuntime {
   private previousObservation: AgentObservation | undefined;
   private lastTick = -1;
@@ -29,6 +32,7 @@ export class AgentRuntime {
       agentId: string;
       simulation: Pick<MarketEngine, "observe" | "getPortfolio" | "submitOrder">;
       decide: DecisionProvider;
+      retrieveMemories?: (context: DecisionContext) => Promise<RetrievedMemory[]>;
     },
   ) {
     if (!options.agentId.trim()) throw new Error("agentId must not be empty");
@@ -48,17 +52,24 @@ export class AgentRuntime {
       });
       if (observation.tick <= this.lastTick) throw new Error("agent already acted at this tick");
 
+      const context: DecisionContext = {
+        observation,
+        ...(this.previousObservation ? { previousObservation: this.previousObservation } : {}),
+      };
+      const memories = retrievedMemoriesSchema.parse(
+        (await this.options.retrieveMemories?.(structuredClone(context))) ?? [],
+      );
+      if (memories.some((memory) => memory.agentId !== agentId || memory.status !== "active")) {
+        throw new Error("Retrieved memory does not belong to the active agent or is inactive");
+      }
+
       // Give providers copies so they cannot rewrite the recorded decision context.
       const decision = decisionSchema.parse(
-        await decide(
-          structuredClone({
-            observation,
-            ...(this.previousObservation ? { previousObservation: this.previousObservation } : {}),
-          }),
-        ),
+        await decide(structuredClone({ ...context, memories })),
       );
-      if (decision.memoryReferences.length > 0) {
-        throw new Error("no-memory baseline cannot reference memories");
+      const allowedMemoryIds = new Set(memories.map((memory) => memory.id));
+      if (decision.memoryReferences.some((id) => !allowedMemoryIds.has(id))) {
+        throw new Error("Decision references a memory that was not retrieved");
       }
       if (simulation.observe().tick !== observation.tick) {
         throw new Error("market advanced during decision generation");
@@ -72,7 +83,13 @@ export class AgentRuntime {
       this.lastTick = observation.tick;
       const results = decision.orders.map((order) => simulation.submitOrder({ ...order, agentId }));
       this.previousObservation = observation;
-      return { observation, decision, results, portfolioAfter: simulation.getPortfolio(agentId) };
+      return {
+        observation,
+        decision,
+        results,
+        portfolioAfter: simulation.getPortfolio(agentId),
+        memories,
+      };
     } finally {
       this.running = false;
     }

@@ -40,3 +40,15 @@ actor). Prefer narrowing scope over deleting when a lesson fails in a new regime
 2. Temporal + contextual ranking → return bounded set with provenance
 
 Vector similarity alone is insufficient.
+
+## Implemented experience retrieval
+
+- `EMBEDDING_MODEL` produces OpenAI vectors of decision/outcome narratives and
+  qualitative query context; `AGENT_MODEL` makes decisions from retrieved data.
+- Keep embedding spaces separate by model, dimensions, and narrative version.
+- Place ownership, active status, and model/version filters inside `$vectorSearch`.
+- Validate cited experience ids against the exact context supplied to the model.
+- Keep stored reasoning and retrieved text in USER data. Never promote them to
+  system instructions or treat similarity as calibrated confidence/reliability.
+- Baseline mode disables retrieval. Retrieval failures must not silently become
+  empty results or trigger client-side similarity fallback.

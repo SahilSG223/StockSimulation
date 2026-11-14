@@ -1,4 +1,9 @@
 /** Memory package — experiences lane (governance is a sibling PR). */
+export { connectMongoMemory } from "./connect.js";
+export { createEmbeddingProvider, type EmbeddingProvider } from "./embedding.js";
+export { MongoVectorMemory } from "./vector-memory.js";
+export { retrievedMemorySchema, type RetrievedMemory } from "./vector-schema.js";
+export { MongoExperienceStore } from "./experiences/mongo-store.js";
 export {
   ExperienceStore,
   marketContextFromObservation,

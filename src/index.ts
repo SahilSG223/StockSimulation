@@ -1,5 +1,6 @@
 /** Package entry — simulation packages land under src/ as phases land. */
 export const PROJECT_NAME = "stock-simulation" as const;
+export { connectMongoMemory, MongoExperienceStore } from "./memory/index.js";
 
 export {
   DEFAULT_ASSETS,
@@ -25,7 +26,4 @@ export {
   marketContextFromObservation,
   recordTradeExperience,
 } from "./memory/index.js";
-export type {
-  ExperienceQuery,
-  ExperienceRecord,
-} from "./memory/index.js";
+export type { ExperienceQuery, ExperienceRecord } from "./memory/index.js";
