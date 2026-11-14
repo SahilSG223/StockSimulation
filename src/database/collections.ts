@@ -2,6 +2,8 @@
 
 export const COLLECTIONS = {
   experiences: "experiences",
+  /** Embedded experience narratives for Atlas Vector Search (see indexes.ts). */
+  experienceVectors: "experience_vectors",
   memories: "memories",
   memoryVersions: "memory_versions",
   decisions: "decisions",

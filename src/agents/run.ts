@@ -1,105 +1,180 @@
-import { MarketEngine } from "../simulation/market-engine.js";
 import { randomUUID } from "node:crypto";
+import { getAgentModel } from "../config.js";
+import { getDb } from "../database/client.js";
+import { COLLECTIONS } from "../database/collections.js";
 import {
-  connectMongoMemory,
-  recordTradeExperience,
-  createEmbeddingProvider,
+  MEMORY_CONTENT_VERSION,
+  MongoExperienceStore,
   MongoVectorMemory,
+  OpenAIEmbedder,
+  recordTradeExperience,
 } from "../memory/index.js";
+import { MarketEngine, REGIME_PARAMS, SIMULATION_VERSION } from "../simulation/index.js";
 import { ARCHETYPES, type Archetype } from "./archetypes.js";
 import { createAgent } from "./create-agent.js";
-import { AGENT_PROMPT_VERSION, readLlmConfig } from "./llm-provider.js";
+import { AGENT_PROMPT_VERSION, createOpenAIChatClient } from "./llm-provider.js";
 import { memoryQuery } from "./memory-query.js";
 
+const SEED = 42;
+const TICKS = 3;
+/** Max past experiences per agent considered for embedding backfill. */
+const BACKFILL_LIMIT = 200;
+
+/** Where the run is, so a failure reports which cycle died. */
+const progress: { simulationId?: string; agentId?: string; tick?: number } = {};
+
 async function main(): Promise<void> {
-  const config = readLlmConfig();
-  const simulation = new MarketEngine({ seed: 42 });
+  const model = getAgentModel();
+  const simulation = new MarketEngine({ seed: SEED });
   const simulationId = randomUUID();
-  const embeddings = createEmbeddingProvider();
-  const memory = await connectMongoMemory();
-  try {
-    const vectors = await MongoVectorMemory.open(memory.database, embeddings);
-    const agents = [];
-    for (const archetype of Object.keys(ARCHETYPES) as Archetype[]) {
-      simulation.registerAgent(archetype);
-      // Backfill unembedded records from earlier runs; existing vectors are not overwritten.
-      for (const experience of await memory.store.listForAgent(archetype)) {
-        await vectors.remember(experience, "legacy-unrecorded");
-      }
-      agents.push(
-        createAgent({
-          agentId: archetype,
-          archetype,
-          simulation,
-          retrieveMemories: (context) =>
-            vectors.retrieve(memoryQuery(context, simulationId, archetype)),
-        }),
-      );
-    }
-    console.log(
-      JSON.stringify({
-        seed: 42,
-        simulationId,
-        memory: "mongodb-vector-search",
-        embeddingModel: embeddings.model,
-        provider: "openai",
-        model: config.model,
-        promptVersion: AGENT_PROMPT_VERSION,
+  progress.simulationId = simulationId;
+  // Private id per agent instance so runs never share history by accident.
+  // Set AGENT_RUN_LABEL to reuse the same agents' memory across runs on purpose.
+  const runLabel = process.env.AGENT_RUN_LABEL?.trim() || simulationId.slice(0, 8);
+  const archetypes = Object.keys(ARCHETYPES) as Archetype[];
+  const agentIds = new Map(archetypes.map((a) => [a, `${a}-${runLabel}`]));
+
+  const db = await getDb();
+  const store = new MongoExperienceStore(db);
+  const embedder = new OpenAIEmbedder();
+  const vectors = new MongoVectorMemory(db, embedder);
+  const client = createOpenAIChatClient();
+  const sectorOf = new Map(simulation.config.assets.map((asset) => [asset.symbol, asset.sector]));
+
+  // One record per run (simulation.md): enough to reproduce and compare it.
+  const runRecord = {
+    simulationId,
+    startedAt: new Date().toISOString(),
+    seed: SEED,
+    ticks: TICKS,
+    simulationVersion: SIMULATION_VERSION,
+    market: {
+      config: simulation.config,
+      regimeParams: REGIME_PARAMS,
+      events: simulation.getEvents(),
+    },
+    agents: {
+      provider: "openai",
+      model,
+      promptVersion: AGENT_PROMPT_VERSION,
+      runLabel,
+      ids: Object.fromEntries(agentIds),
+    },
+    memory: {
+      store: "mongodb",
+      experiences: COLLECTIONS.experiences,
+      vectors: COLLECTIONS.experienceVectors,
+      embeddingModel: embedder.model,
+      embeddingDimensions: embedder.dimensions,
+      contentVersion: MEMORY_CONTENT_VERSION,
+      backfillLimit: BACKFILL_LIMIT,
+    },
+  };
+  console.log(JSON.stringify({ type: "run", ...runRecord }));
+  await db
+    .collection<typeof runRecord & { _id: string }>(COLLECTIONS.simulations)
+    .insertOne({ _id: simulationId, ...runRecord });
+
+  const agents = [];
+  for (const archetype of archetypes) {
+    const agentId = agentIds.get(archetype)!;
+    simulation.registerAgent(agentId);
+    // Only this agent's latest experiences, and only those without a vector yet.
+    const history = await store.query({ agentId, limit: BACKFILL_LIMIT });
+    await vectors.rememberMissing(agentId, history, "legacy-unrecorded");
+    agents.push({
+      agentId,
+      runtime: createAgent({
+        agentId,
+        archetype,
+        simulation,
+        model,
+        client,
+        onLlmCall: (call) =>
+          console.log(
+            JSON.stringify({
+              type: "llm_call",
+              simulationId,
+              agentId,
+              tick: simulation.tick,
+              ...call,
+            }),
+          ),
+        retrieveMemories: (context) =>
+          vectors.retrieve(memoryQuery(context, simulationId, archetype)),
       }),
-    );
-    for (let tick = 0; tick < 3; tick++) {
-      // Finish every agent's decision before advancing the shared market.
-      for (const agent of agents) {
-        const record = await agent.runCycle();
-        const experience = await recordTradeExperience({
-          store: memory.store,
-          agentId: record.observation.portfolio.agentId,
-          simulationId,
-          tick: record.observation.tick,
-          market: {
-            regime: "", // Ground-truth regimes are not part of the agent's observation.
-            prices: record.observation.prices,
-            eventIds: record.observation.events.map((event) => event.id),
-            eventTypes: [...new Set(record.observation.events.map((event) => event.type))],
-          },
-          decision: record.decision,
-          results: record.results,
-          sectorOf: new Map(simulation.config.assets.map((asset) => [asset.symbol, asset.sector])),
-          realizedPnlDelta:
-            record.portfolioAfter.realizedPnl - record.observation.portfolio.realizedPnl,
-        });
-        await vectors.remember(experience, config.model);
-        console.log(JSON.stringify(record));
-      }
-      simulation.step();
-    }
-    console.log(`Final agent portfolios at tick ${simulation.tick} (run ${simulationId})`);
-    console.table(
-      (Object.keys(ARCHETYPES) as Archetype[]).map((agentId) => {
-        const portfolio = simulation.getPortfolio(agentId);
-        return {
-          Agent: agentId,
-          "Starting cash": simulation.config.initialCash.toFixed(2),
-          Cash: portfolio.cash.toFixed(2),
-          Equity: portfolio.equity.toFixed(2),
-          "Realized P&L": portfolio.realizedPnl.toFixed(2),
-          "Unrealized P&L": portfolio.unrealizedPnl.toFixed(2),
-          "Net P&L": (portfolio.equity - simulation.config.initialCash).toFixed(2),
-          Holdings:
-            portfolio.positions
-              .map((position) => `${position.symbol}: ${position.quantity}`)
-              .join(", ") || "none",
-        };
-      }),
-    );
-  } finally {
-    await memory.close();
+    });
   }
+
+  for (let tick = 0; tick < TICKS; tick++) {
+    // Finish every agent's decision before advancing the shared market.
+    for (const { agentId, runtime } of agents) {
+      progress.agentId = agentId;
+      progress.tick = simulation.tick;
+      const record = await runtime.runCycle();
+      const experience = await recordTradeExperience({
+        store,
+        agentId,
+        simulationId,
+        tick: record.observation.tick,
+        market: {
+          regime: "", // Ground-truth regimes are not part of the agent's observation.
+          prices: record.observation.prices,
+          eventIds: record.observation.events.map((event) => event.id),
+          eventTypes: [...new Set(record.observation.events.map((event) => event.type))],
+        },
+        decision: record.decision,
+        results: record.results,
+        sectorOf,
+        realizedPnlDelta:
+          record.portfolioAfter.realizedPnl - record.observation.portfolio.realizedPnl,
+      });
+      await vectors.remember(experience, model);
+      console.log(JSON.stringify({ type: "cycle", simulationId, ...record }));
+    }
+    simulation.step();
+  }
+
+  console.log(`Final agent portfolios at tick ${simulation.tick} (run ${simulationId})`);
+  console.table(
+    agents.map(({ agentId }) => {
+      const portfolio = simulation.getPortfolio(agentId);
+      return {
+        Agent: agentId,
+        "Starting cash": simulation.config.initialCash.toFixed(2),
+        Cash: portfolio.cash.toFixed(2),
+        Equity: portfolio.equity.toFixed(2),
+        "Realized P&L": portfolio.realizedPnl.toFixed(2),
+        "Unrealized P&L": portfolio.unrealizedPnl.toFixed(2),
+        "Net P&L": (portfolio.equity - simulation.config.initialCash).toFixed(2),
+        Holdings:
+          portfolio.positions
+            .map((position) => `${position.symbol}: ${position.quantity}`)
+            .join(", ") || "none",
+      };
+    }),
+  );
 }
 
-main().catch(() => {
-  console.error(
-    "Agent run failed. Check AGENT_MODEL, EMBEDDING_MODEL, provider keys, MongoDB connection and Vector Search index readiness. No baseline fallback was used. If execution already occurred, inspect the run before retrying.",
-  );
-  process.exitCode = 1;
-});
+/** Drop anything that looks like a connection string or API key before printing. */
+function redact(message: string): string {
+  return message
+    .replace(/mongodb(\+srv)?:\/\/\S+/gi, "mongodb://<redacted>")
+    .replace(/sk-[A-Za-z0-9_-]{8,}/g, "sk-<redacted>");
+}
+
+main()
+  .then(() => process.exit(0))
+  .catch((error: unknown) => {
+    console.error(
+      JSON.stringify({
+        type: "run_failed",
+        error: redact(error instanceof Error ? error.message : String(error)),
+        ...progress,
+      }),
+    );
+    console.error(
+      "No baseline fallback was used. Orders submitted earlier in this tick may already have filled (submitOrder is sequential, not a transaction); inspect the run before retrying.",
+    );
+    process.exit(1);
+  });

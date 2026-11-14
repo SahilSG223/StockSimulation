@@ -31,9 +31,7 @@ export class ExperienceStore {
       },
       decision: {
         reasoning: input.decision.reasoning,
-        ...(input.decision.strategy !== undefined
-          ? { strategy: input.decision.strategy }
-          : {}),
+        ...(input.decision.strategy !== undefined ? { strategy: input.decision.strategy } : {}),
         ...(input.decision.confidence !== undefined
           ? { confidence: input.decision.confidence }
           : {}),
@@ -61,14 +59,17 @@ export class ExperienceStore {
     return record;
   }
 
-  get(id: ExperienceId): ExperienceRecord | undefined {
-    return this.byId.get(id);
+  /** Owner is required: another agent's id returns undefined. */
+  get(id: ExperienceId, agentId: AgentId): ExperienceRecord | undefined {
+    const hit = this.byId.get(id);
+    return hit?.agentId === agentId ? hit : undefined;
   }
 
-  getMany(ids: readonly ExperienceId[]): ExperienceRecord[] {
+  /** Owner-scoped; keeps the requested id order and skips misses. */
+  getMany(ids: readonly ExperienceId[], agentId: AgentId): ExperienceRecord[] {
     const out: ExperienceRecord[] = [];
     for (const id of ids) {
-      const hit = this.byId.get(id);
+      const hit = this.get(id, agentId);
       if (hit) out.push(hit);
     }
     return out;

@@ -58,6 +58,27 @@ describe("MongoExperienceStore (offline mocks)", () => {
     await store.listForAgent("a1");
     expect(find).toHaveBeenCalledWith(expect.objectContaining({ agentId: "a1" }));
   });
+
+  it("get / getMany put the owner in the Mongo filter and keep request order", async () => {
+    const row = (id: string) => ({ ...baseExperience({ agentId: "a1", tick: 1, id }), _id: id });
+    const findOne = vi.fn(async () => null);
+    const toArray = vi.fn(async () => [row("exp-a"), row("exp-b")]);
+    const find = vi.fn(() => ({ toArray }));
+    const db = { collection: vi.fn(() => ({ findOne, find })) } as unknown as Db;
+    const store = new MongoExperienceStore(db);
+
+    expect(await store.get("exp-a", "a2")).toBeUndefined();
+    expect(findOne).toHaveBeenCalledWith({ _id: "exp-a", agentId: "a2" });
+
+    const many = await store.getMany(["exp-b", "missing", "exp-a"], "a1");
+    expect(find).toHaveBeenCalledWith({
+      _id: { $in: ["exp-b", "missing", "exp-a"] },
+      agentId: "a1",
+    });
+    expect(many.map((r) => r.id)).toEqual(["exp-b", "exp-a"]);
+    expect(many[0]).not.toHaveProperty("_id");
+    expect(await store.getMany([], "a1")).toEqual([]);
+  });
 });
 
 describe("MongoMemoryRepository (offline mocks)", () => {
@@ -73,7 +94,9 @@ describe("MongoMemoryRepository (offline mocks)", () => {
 
     const saved = await repo.insert(baseMemory({ agentId: "a1", _id: "mem-1" }));
     expect(saved._id).toBe("mem-1");
-    expect(insertOne).toHaveBeenCalledWith(expect.objectContaining({ _id: "mem-1", agentId: "a1" }));
+    expect(insertOne).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: "mem-1", agentId: "a1" }),
+    );
   });
 
   it("updateForAgent filters by agentId+_id and throws when nothing matches", async () => {

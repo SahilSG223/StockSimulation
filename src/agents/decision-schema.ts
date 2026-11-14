@@ -5,7 +5,8 @@ export const proposedOrderSchema = z
   .object({
     symbol: z.string().trim().min(1),
     side: z.enum(ORDER_SIDES),
-    quantity: z.number().finite().positive(),
+    // Whole shares: the engine rejects fractional quantities, so reject them before it.
+    quantity: z.number().int().positive(),
   })
   .strict();
 

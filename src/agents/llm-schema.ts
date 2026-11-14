@@ -15,7 +15,7 @@ export const llmDecisionJsonSchema = {
         properties: {
           symbol: { type: "string" },
           side: { type: "string", enum: ["buy", "sell"] },
-          quantity: { type: "number" },
+          quantity: { type: "integer" },
         },
       },
     },
@@ -38,4 +38,12 @@ export const openAiDecisionResponseSchema = z.object({
       }),
     )
     .length(1),
+  /** Kept for the per-call record (token usage). */
+  usage: z
+    .object({
+      prompt_tokens: z.number().int().nonnegative(),
+      completion_tokens: z.number().int().nonnegative(),
+      total_tokens: z.number().int().nonnegative(),
+    })
+    .optional(),
 });

@@ -1,20 +1,22 @@
-import { createHash } from "node:crypto";
-import { setTimeout } from "node:timers/promises";
 import type { Collection, Db } from "mongodb";
-import { embeddingVectorSchema, type EmbeddingProvider } from "./embedding.js";
-import { experienceRecordSchema } from "./experiences/experience-schema.js";
+import { COLLECTIONS } from "../database/collections.js";
+import { EXPERIENCE_VECTOR_SEARCH_INDEX } from "../database/indexes.js";
+import { rankWithEmbeddings } from "./embeddings/rank-with-embeddings.js";
+import type { EmbeddedMemory, Embedder } from "./embeddings/types.js";
 import type { ExperienceRecord } from "./experiences/types.js";
 import {
+  DEFAULT_EXPERIENCE_RELIABILITY,
   MEMORY_CONTENT_VERSION,
+  embeddingVectorSchema,
   retrievedMemorySchema,
   vectorMemorySchema,
   vectorQuerySchema,
-  vectorCandidateSchema,
-  searchIndexStatusSchema,
   type RetrievedMemory,
   type VectorMemoryDocument,
   type VectorMemoryQuery,
 } from "./vector-schema.js";
+
+const RETURNED_MEMORIES = 5;
 
 /** Experience narrative, not an embedding of raw prices or balances. */
 export function experienceContent(experience: ExperienceRecord): string {
@@ -31,169 +33,183 @@ export function experienceContent(experience: ExperienceRecord): string {
   ].join("\n");
 }
 
+/**
+ * Experience vectors in `COLLECTIONS.experienceVectors`, searched with Atlas
+ * `$vectorSearch` and ranked by `rankWithEmbeddings`. Indexes are created by
+ * `ensureMemoryIndexes` + `ensureExperienceVectorSearchIndex` (`pnpm
+ * ensure-indexes` / `pnpm memory:prepare`), never ad hoc here.
+ */
 export class MongoVectorMemory {
-  private constructor(
-    private readonly collection: Collection<VectorMemoryDocument>,
-    private readonly embeddings: EmbeddingProvider,
-    readonly dimensions: number,
-  ) {}
+  private readonly collection: Collection<VectorMemoryDocument>;
 
-  static async open(database: Db, embeddings: EmbeddingProvider): Promise<MongoVectorMemory> {
-    const probe = embeddingVectorSchema.parse(
-      await embeddings.embed("Agent decision context and execution experience."),
-    );
-    const space = createHash("sha256")
-      .update(`${embeddings.model}:${probe.length}:${MEMORY_CONTENT_VERSION}`)
-      .digest("hex")
-      .slice(0, 16);
-    const memory = new MongoVectorMemory(
-      database.collection<VectorMemoryDocument>(`experience_vectors_${space}`),
-      embeddings,
-      probe.length,
-    );
-    await memory.initialize();
-    return memory;
+  constructor(
+    db: Db,
+    private readonly embedder: Embedder,
+  ) {
+    this.collection = db.collection<VectorMemoryDocument>(COLLECTIONS.experienceVectors);
   }
 
-  private async initialize(): Promise<void> {
-    try {
-      await this.collection.createIndex({ agentId: 1, id: 1 }, { unique: true });
-      const existing = await this.collection.listSearchIndexes("experience_similarity").toArray();
-      if (existing.length === 0) {
-        await this.collection.createSearchIndex({
-          name: "experience_similarity",
-          type: "vectorSearch",
-          definition: {
-            fields: [
-              {
-                type: "vector",
-                path: "embedding",
-                numDimensions: this.dimensions,
-                similarity: "cosine",
-              },
-              ...[
-                "agentId",
-                "status",
-                "embeddingModel",
-                "contentVersion",
-                "simulationId",
-                "tick",
-              ].map((path) => ({ type: "filter", path })),
-            ],
-          },
-        });
-      }
-      for (let attempt = 0; attempt < 30; attempt++) {
-        const indexes = searchIndexStatusSchema.parse(
-          await this.collection.listSearchIndexes("experience_similarity").toArray(),
-        );
-        if (indexes.some((index) => index.queryable === true)) return;
-        if (indexes.some((index) => index.status === "FAILED")) throw new Error("index failed");
-        await setTimeout(2000);
-      }
-    } catch {
-      throw new Error(
-        "MongoDB vector index setup failed; verify Vector Search support and search-index permissions",
-      );
+  /**
+   * Embed and store the given experiences of one agent that have no vector yet
+   * (one batched embedding call). Existing vectors are never overwritten, so an
+   * invalidated memory is never reactivated. Returns how many were embedded.
+   */
+  async rememberMissing(
+    agentId: string,
+    experiences: readonly ExperienceRecord[],
+    decisionModel: string,
+  ): Promise<number> {
+    if (experiences.some((experience) => experience.agentId !== agentId)) {
+      throw new Error("Cannot embed another agent's experience");
     }
-    throw new Error("MongoDB vector index is still building; retry after the index is queryable");
-  }
+    if (experiences.length === 0) return 0;
 
-  async remember(input: ExperienceRecord, decisionModel: string): Promise<void> {
-    const experience = experienceRecordSchema.parse(input);
-    const identity = { agentId: experience.agentId, id: experience.id };
+    let existing: Set<string>;
     try {
-      if (await this.collection.findOne(identity, { projection: { _id: 1 } })) return;
+      const rows = await this.collection
+        .find(
+          { agentId, id: { $in: experiences.map((e) => e.id) } },
+          { projection: { _id: 0, id: 1 } },
+        )
+        .toArray();
+      existing = new Set(rows.map((row) => row.id));
     } catch {
       throw new Error("MongoDB vector memory lookup failed");
     }
-    const content = experienceContent(experience);
-    const embedding = await this.embed(content);
-    const document = vectorMemorySchema.parse({
-      ...identity,
-      simulationId: experience.simulationId,
-      tick: experience.tick,
-      content,
-      embedding,
-      embeddingModel: this.embeddings.model,
-      decisionModel,
-      contentVersion: MEMORY_CONTENT_VERSION,
-      status: "active",
-      symbols: experience.scope.symbols,
-      eventTypes: experience.market.eventTypes,
-    });
-    try {
-      // Idempotent backfill; never reactivate an existing invalidated memory.
-      await this.collection.updateOne(identity, { $setOnInsert: document }, { upsert: true });
-    } catch {
-      throw new Error("MongoDB vector memory write failed");
+
+    const missing = experiences.filter((experience) => !existing.has(experience.id));
+    if (missing.length === 0) return 0;
+
+    const contents = missing.map(experienceContent);
+    const embeddings = await this.embedder.embedMany(contents);
+    for (const [i, experience] of missing.entries()) {
+      const document = vectorMemorySchema.parse({
+        id: experience.id,
+        agentId,
+        simulationId: experience.simulationId,
+        tick: experience.tick,
+        content: contents[i],
+        embedding: this.validVector(embeddings[i]),
+        embeddingModel: this.embedder.model,
+        decisionModel,
+        contentVersion: MEMORY_CONTENT_VERSION,
+        status: "active",
+        reliability: DEFAULT_EXPERIENCE_RELIABILITY,
+        symbols: experience.scope.symbols,
+        sectors: experience.scope.sectors,
+        regimes: experience.scope.regimes,
+        eventTypes: experience.market.eventTypes,
+      });
+      try {
+        await this.collection.updateOne(
+          { agentId, id: experience.id },
+          { $setOnInsert: document },
+          { upsert: true },
+        );
+      } catch {
+        throw new Error("MongoDB vector memory write failed");
+      }
     }
+    return missing.length;
   }
 
-  private async embed(content: string): Promise<number[]> {
-    const vector = embeddingVectorSchema.parse(await this.embeddings.embed(content));
-    if (vector.length !== this.dimensions)
-      throw new Error("Embedding dimensions changed; reopen vector memory with a compatible model");
-    return vector;
+  async remember(experience: ExperienceRecord, decisionModel: string): Promise<void> {
+    await this.rememberMissing(experience.agentId, [experience], decisionModel);
   }
 
   async retrieve(input: VectorMemoryQuery): Promise<RetrievedMemory[]> {
     const query = vectorQuerySchema.parse(input);
-    const embedding = await this.embed(query.content);
+    const queryEmbedding = this.validVector(await this.embedder.embed(query.content));
     let docs: unknown[];
     try {
       docs = await this.collection
         .aggregate([
           {
             $vectorSearch: {
-              index: "experience_similarity",
+              index: EXPERIENCE_VECTOR_SEARCH_INDEX,
               path: "embedding",
-              queryVector: embedding,
+              queryVector: queryEmbedding,
               numCandidates: 400,
               limit: 20,
+              // Ownership, lifecycle and embedding space are enforced in the database query.
               filter: {
                 agentId: query.agentId,
                 status: "active",
-                embeddingModel: this.embeddings.model,
+                embeddingModel: this.embedder.model,
                 contentVersion: MEMORY_CONTENT_VERSION,
                 $or: [{ simulationId: { $ne: query.simulationId } }, { tick: { $lt: query.tick } }],
               },
             },
           },
-          { $set: { similarity: { $meta: "vectorSearchScore" } } },
-          { $project: { embedding: 0, _id: 0 } },
+          { $project: { _id: 0 } },
         ])
         .toArray();
     } catch {
       throw new Error("MongoDB vector retrieval failed; check index readiness and filters");
     }
-    return docs
-      .map((doc) => {
-        const candidate = vectorCandidateSchema.parse(doc);
-        if (
-          candidate.agentId !== query.agentId ||
-          candidate.status !== "active" ||
-          candidate.embeddingModel !== this.embeddings.model ||
-          (candidate.simulationId === query.simulationId && candidate.tick >= query.tick)
-        ) {
-          throw new Error("Vector retrieval returned an out-of-scope experience");
-        }
-        const symbolOverlap = candidate.symbols.some((symbol) => query.symbols.includes(symbol));
-        const eventOverlap = candidate.eventTypes.some((type) => query.eventTypes.includes(type));
-        const contextualRelevance = 0.25 + (symbolOverlap ? 0.5 : 0) + (eventOverlap ? 0.25 : 0);
-        // Cross-run tick clocks are incomparable, so use a neutral prior rather than inventing age.
-        const temporalRelevance =
-          candidate.simulationId === query.simulationId
-            ? 1 / (1 + (query.tick - candidate.tick) / 100)
-            : 0.5;
+
+    const candidates = docs.map((doc) => {
+      const candidate = vectorMemorySchema.parse(doc);
+      if (
+        candidate.agentId !== query.agentId ||
+        candidate.status !== "active" ||
+        candidate.embeddingModel !== this.embedder.model ||
+        (candidate.simulationId === query.simulationId && candidate.tick >= query.tick)
+      ) {
+        throw new Error("Vector retrieval returned an out-of-scope experience");
+      }
+      return candidate;
+    });
+    const byId = new Map(candidates.map((candidate) => [candidate.id, candidate]));
+
+    // Note: across runs, tick clocks are not comparable; the ranker clamps
+    // negative ages to 0, so a memory from another run is never penalised for age.
+    return rankWithEmbeddings({
+      memories: candidates.map(toEmbeddedMemory),
+      queryEmbedding,
+      ctx: {
+        agentId: query.agentId,
+        tick: query.tick,
+        assets: query.symbols,
+        eventTypes: query.eventTypes,
+      },
+    })
+      .slice(0, RETURNED_MEMORIES)
+      .map((ranked) => {
+        const { embedding: _embedding, ...stored } = byId.get(ranked.memory.id)!;
         return retrievedMemorySchema.parse({
-          ...candidate,
-          contextualRelevance,
-          temporalRelevance,
-          rankingScore: candidate.similarity * contextualRelevance * temporalRelevance,
+          ...stored,
+          semanticSimilarity: ranked.semanticSimilarity,
+          contextualApplicability: ranked.contextualApplicability,
+          temporalRelevance: ranked.temporalRelevance,
+          retrievalScore: ranked.retrievalScore,
         });
-      })
-      .sort((a, b) => b.rankingScore - a.rankingScore || a.id.localeCompare(b.id))
-      .slice(0, 5);
+      });
   }
+
+  private validVector(vector: unknown): number[] {
+    const parsed = embeddingVectorSchema.parse(vector);
+    if (parsed.length !== this.embedder.dimensions) {
+      throw new Error("Embedding dimensions do not match the configured embedder");
+    }
+    return parsed;
+  }
+}
+
+function toEmbeddedMemory(doc: VectorMemoryDocument): EmbeddedMemory {
+  return {
+    id: doc.id,
+    agentId: doc.agentId,
+    content: doc.content,
+    embedding: doc.embedding,
+    status: doc.status,
+    reliability: doc.reliability,
+    updatedAtTick: doc.tick,
+    scope: {
+      sectors: doc.sectors,
+      regimes: doc.regimes,
+      eventTypes: doc.eventTypes,
+      assets: doc.symbols,
+    },
+  };
 }

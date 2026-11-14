@@ -16,23 +16,25 @@ const memory: RetrievedMemory = {
   decisionModel: "agent-test",
   contentVersion: "experience-v1",
   status: "active",
+  reliability: 0.5,
   symbols: ["TECH"],
+  sectors: ["Technology"],
+  regimes: [],
   eventTypes: [],
-  similarity: 0.9,
-  contextualRelevance: 0.75,
-  temporalRelevance: 0.5,
-  rankingScore: 0.3375,
+  semanticSimilarity: 0.9,
+  contextualApplicability: 1,
+  temporalRelevance: 0.85,
+  retrievalScore: 0.4,
 };
 
 function setup(retrieved: RetrievedMemory[], references = ["experience-1"]) {
   const simulation = new MarketEngine({ seed: 42 });
   simulation.registerAgent("alice");
   const retrieveMemories = vi.fn().mockResolvedValue(retrieved);
-  const request = vi.fn<typeof fetch>().mockImplementation(async (_url, options) => {
-    const body = JSON.parse(String(options!.body));
-    const data = JSON.parse(body.messages[1].content);
+  const request = vi.fn(async (body: { messages: { content?: unknown }[] }) => {
+    const data = JSON.parse(String(body.messages[1]!.content));
     // Model stub changes its proposed size in response to the supplied memory.
-    return Response.json({
+    return {
       choices: [
         {
           finish_reason: "stop",
@@ -49,14 +51,14 @@ function setup(retrieved: RetrievedMemory[], references = ["experience-1"]) {
           },
         },
       ],
-    });
+    };
   });
   const agent = createAgent({
     agentId: "alice",
     archetype: "momentum",
     simulation,
-    env: { AGENT_MODEL: "test-model", OPENAI_API_KEY: "test" },
-    fetch: request,
+    model: "test-model",
+    client: { chat: { completions: { create: request } } },
     retrieveMemories,
   });
   return { simulation, retrieveMemories, request, agent };
@@ -71,9 +73,9 @@ describe("memory-influenced decisions", () => {
     expect((await withoutMemory.agent.runCycle()).decision.orders[0]!.quantity).toBe(5);
     expect(record.decision.memoryReferences).toEqual([memory.id]);
     expect(record.memories).toEqual([memory]);
-    const body = JSON.parse(String(withMemory.request.mock.calls[0]![1]!.body));
-    expect(body.messages[0].content).not.toContain(memory.content);
-    expect(JSON.parse(body.messages[1].content).memories[0].content).toBe(memory.content);
+    const body = withMemory.request.mock.calls[0]![0];
+    expect(body.messages[0]!.content).not.toContain(memory.content);
+    expect(JSON.parse(String(body.messages[1]!.content)).memories[0].content).toBe(memory.content);
   });
 
   it("rejects hallucinated memory references before engine submission", async () => {
@@ -106,7 +108,6 @@ describe("memory-influenced decisions", () => {
       archetype: "momentum",
       simulation,
       mode: "baseline",
-      env: {},
       retrieveMemories,
     });
     expect((await agent.runCycle()).memories).toEqual([]);

@@ -1,4 +1,16 @@
-/** Memory package — experiences + governance lanes. */
+/** Memory package — experiences, governance, embeddings and experience vectors. */
+export { MongoVectorMemory, experienceContent } from "./vector-memory.js";
+export {
+  DEFAULT_EXPERIENCE_RELIABILITY,
+  MEMORY_CONTENT_VERSION,
+  MEMORY_STATUSES,
+  retrievedMemoriesSchema,
+  retrievedMemorySchema,
+  vectorQuerySchema,
+  type RetrievedMemory,
+  type VectorMemoryDocument,
+  type VectorMemoryQuery,
+} from "./vector-schema.js";
 export {
   ExperienceStore,
   MongoExperienceStore,
@@ -18,11 +30,7 @@ export {
   type RecordTradeExperienceInput,
   type SectorLookup,
 } from "./experiences/index.js";
-export {
-  MongoMemoryRepository,
-  memoryDocSchema,
-  type MemoryDoc,
-} from "./memories/index.js";
+export { MongoMemoryRepository, memoryDocSchema, type MemoryDoc } from "./memories/index.js";
 export {
   DEFAULT_WEIGHTS,
   contextualApplicability,
