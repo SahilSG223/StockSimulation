@@ -11,7 +11,8 @@
 import { DEFAULT_ASSETS, MarketEngine, toPublicInfo } from "../simulation/index.js";
 import type { PortfolioSnapshot, RegimeId } from "../simulation/index.js";
 import { SCENARIOS, type ScenarioId } from "../../experiments/scenarios.js";
-import { EvalMemoryStore, RegimeEstimator } from "./memory-lab.js";
+import { MarketFeed } from "../market/market-feed.js";
+import { EvalMemoryStore } from "./memory-lab.js";
 import { memoryAwarePolicy } from "./policies.js";
 import {
   EVAL_ARCHETYPES,
@@ -36,17 +37,6 @@ function ordersEqual(a: readonly ProposedOrder[], b: readonly ProposedOrder[]): 
   });
 }
 
-function crossSectionalMeanReturn(
-  prev: Readonly<Record<string, number>>,
-  next: Readonly<Record<string, number>>,
-): number {
-  const rs = Object.keys(next).flatMap((s) => {
-    const p = prev[s];
-    const n = next[s];
-    return p !== undefined && p > 0 && n !== undefined ? [n / p - 1] : [];
-  });
-  return rs.length === 0 ? 0 : rs.reduce((sum, r) => sum + r, 0) / rs.length;
-}
 
 export function runOne(args: {
   scenario: ScenarioId;
@@ -63,7 +53,9 @@ export function runOne(args: {
   spec.setup(engine);
 
   const store = new EvalMemoryStore(args.memoryMode);
-  const estimator = new RegimeEstimator(engine.currentRegime);
+  // Same regime estimate as the live run (src/market). Evaluation still reads the
+  // true regime below, but only to score agents, never to feed them or memory.
+  const feed = new MarketFeed(engine);
 
   const market: MarketFrame[] = [];
   const decisions: DecisionLogEntry[] = [];
@@ -72,19 +64,18 @@ export function runOne(args: {
     { tick: 0, regime: engine.currentRegime },
   ];
 
-  let prevPrices = engine.getPrices();
   const history = new Map<string, number[]>();
-  for (const [symbol, price] of Object.entries(prevPrices)) history.set(symbol, [price]);
+  for (const [symbol, price] of Object.entries(engine.getPrices())) history.set(symbol, [price]);
 
   let lastRegimeTruth = engine.currentRegime;
   // A memory-fired buy awaiting its next-tick outcome, per agent.
   const pending = new Map<string, { memoryId: string; symbol: string; entryPrice: number }>();
 
   for (let t = 1; t <= spec.ticks; t++) {
-    const snap = engine.step();
+    const snap = feed.step();
     for (const [symbol, price] of Object.entries(snap.prices)) history.get(symbol)!.push(price);
-    const regimeEstimate = estimator.update(crossSectionalMeanReturn(prevPrices, snap.prices));
-    prevPrices = snap.prices;
+    // Undefined until there is enough price history (~20 ticks).
+    const regimeEstimate = feed.observe().regimeEstimate;
 
     market.push({ tick: snap.tick, regime: snap.regime, marketReturn: snap.marketReturn, prices: { ...snap.prices } });
     if (snap.regime !== lastRegimeTruth) {

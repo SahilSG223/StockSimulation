@@ -15,11 +15,12 @@
  *               losing in a regime different from the one it was learned in,
  *               reliability decays and `handleContradiction` invalidates/narrows it.
  *
- * Two guards keep this honest. The regime estimate (see `RegimeEstimator`) gates
- * the filter; it reads high_vol from variance (strong signal) and bull/bear from a
- * hysteretic mean (weak signal). Invalidation is additionally outcome-gated — a
- * lesson must actually lose in a mismatched regime — so a low-SNR mean estimate
- * alone can't retire a still-good lesson.
+ * Two guards keep this honest. The regime estimate is `estimateRegime` from
+ * src/market (via `MarketFeed`), the same one the live agent run uses; it is
+ * undefined until there is enough price history, and while it is unknown no
+ * regime filtering or regime-based invalidation happens. Invalidation is also
+ * outcome-gated — a lesson must actually lose in a mismatched regime — so a
+ * noisy estimate alone can't retire a still-good lesson.
  *
  * Agent isolation is enforced in the query for ALL modes (a hard rule): raw is
  * "ungoverned lifecycle", not "can read another agent's memories".
@@ -31,7 +32,7 @@ import {
   type MemoryRecord,
 } from "../memory/governance/index.js";
 import type { RegimeId } from "../simulation/index.js";
-import type { EvalLifecycleEvent, MemoryMode, RetrievedMemory } from "./types.js";
+import type { EvalLifecycleEvent, EvalRetrievedMemory, MemoryMode } from "./types.js";
 
 const MEMORY_TOP_K = 3;
 /**
@@ -88,13 +89,13 @@ export class EvalMemoryStore {
   consolidate(args: {
     agentId: string;
     tick: number;
-    regimeEstimate: string;
+    regimeEstimate: string | undefined;
     regimeTruth: RegimeId;
     sector: string;
     strategy: string;
   }): void {
     if (this.mode === "none") return;
-    const key = `${args.agentId}|${args.sector}|${args.regimeEstimate}`;
+    const key = `${args.agentId}|${args.sector}|${args.regimeEstimate ?? "*"}`;
     const existingId = this.activeByKey.get(key);
     if (existingId !== undefined) {
       const i = this.indexOf(existingId);
@@ -119,7 +120,13 @@ export class EvalMemoryStore {
       updatedAtTick: args.tick,
       confidence: 0.5,
       reliability: 0.55,
-      scope: { sectors: [args.sector], regimes: [args.regimeEstimate], eventTypes: [], assets: [] },
+      // No estimate yet → regime-agnostic lesson (empty scope), not a guessed regime.
+      scope: {
+        sectors: [args.sector],
+        regimes: args.regimeEstimate === undefined ? [] : [args.regimeEstimate],
+        eventTypes: [],
+        assets: [],
+      },
       status: "active",
       version: 1,
     });
@@ -131,9 +138,9 @@ export class EvalMemoryStore {
   retrieve(args: {
     agentId: string;
     tick: number;
-    regimeEstimate: string;
+    regimeEstimate: string | undefined;
     sectors: readonly string[];
-  }): RetrievedMemory[] {
+  }): EvalRetrievedMemory[] {
     if (this.mode === "none") return [];
     const query = retrievalQuery(args.sectors);
 
@@ -148,13 +155,14 @@ export class EvalMemoryStore {
         ctx: {
           agentId: args.agentId,
           tick: args.tick,
-          regimeEstimate: args.regimeEstimate,
+          ...(args.regimeEstimate !== undefined ? { regimeEstimate: args.regimeEstimate } : {}),
           sectors: [...args.sectors],
         },
         query,
       })
         .filter(
           (r) =>
+            args.regimeEstimate === undefined ||
             r.memory.scope.regimes.length === 0 ||
             r.memory.scope.regimes.includes(args.regimeEstimate),
         )
@@ -184,7 +192,7 @@ export class EvalMemoryStore {
     memoryId: string;
     won: boolean;
     atTick: number;
-    regimeEstimate: string;
+    regimeEstimate: string | undefined;
   }): EvalLifecycleEvent[] {
     if (this.mode !== "governed") return [];
     const i = this.indexOf(args.memoryId);
@@ -202,7 +210,10 @@ export class EvalMemoryStore {
       return [];
     }
 
-    const regimeMismatch = !m.scope.regimes.includes(args.regimeEstimate);
+    const regimeMismatch =
+      args.regimeEstimate !== undefined &&
+      m.scope.regimes.length > 0 &&
+      !m.scope.regimes.includes(args.regimeEstimate);
     const streak = regimeMismatch ? (this.lossStreak.get(m.id) ?? 0) + 1 : 0;
     this.lossStreak.set(m.id, streak);
     const decayed: MemoryRecord = {
@@ -229,47 +240,5 @@ export class EvalMemoryStore {
     return [
       { agentId: m.agentId, memoryId: m.id, from: m.status, to: result.memory.status, reason, atTick: args.atTick },
     ];
-  }
-}
-
-/**
- * Regime label estimated from visible cross-sectional returns — an estimate,
- * never the engine's ground-truth label. Used to tag a lesson's scope and to
- * filter/rank retrieval.
- *
- * Two signals, in order of signal-to-noise:
- *   1. Variance — high_vol's realized spread (~7e-4 EWMA) separates cleanly from
- *      bull/bear (~1e-4/2e-4), so a variance gate detects it reliably even though
- *      its mean drift is ~0. Checked first.
- *   2. Mean — bull vs bear from a sticky EMA with a hysteresis band, so a run of
- *      noise doesn't flap the label. Low SNR (drift ±0.0008 vs vol ~0.01), hence
- *      the band; this is why invalidation is outcome-gated, not estimate-gated.
- */
-export class RegimeEstimator {
-  private ema = 0;
-  private varEma = 0;
-  private current: string;
-  constructor(
-    initial = "bull",
-    private readonly alpha = 0.12,
-    private readonly threshold = 0.0012,
-    private readonly varAlpha = 0.3,
-    private readonly varThreshold = 3.2e-4,
-  ) {
-    this.current = initial;
-  }
-  update(crossSectionalMeanReturn: number): string {
-    this.ema = this.alpha * crossSectionalMeanReturn + (1 - this.alpha) * this.ema;
-    this.varEma =
-      this.varAlpha * crossSectionalMeanReturn * crossSectionalMeanReturn +
-      (1 - this.varAlpha) * this.varEma;
-    if (this.varEma > this.varThreshold) this.current = "high_vol";
-    else if (this.ema > this.threshold) this.current = "bull";
-    else if (this.ema < -this.threshold) this.current = "bear";
-    // within the band: keep the previous estimate (sticky).
-    return this.current;
-  }
-  get estimate(): string {
-    return this.current;
   }
 }

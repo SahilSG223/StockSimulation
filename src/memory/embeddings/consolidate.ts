@@ -21,7 +21,7 @@ export async function consolidateExperienceToMemory(args: {
   const lesson =
     args.lesson ??
     [
-      `In regime ${exp.market.regime}`,
+      exp.market.regime ? `In regime ${exp.market.regime}` : null,
       exp.decision.strategy ? `using ${exp.decision.strategy}` : null,
       `agent decided: ${exp.decision.reasoning}`,
       `outcome: ${exp.outcome.summary}`,

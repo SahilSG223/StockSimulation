@@ -18,6 +18,7 @@ export function toEmbeddedMemory(doc: MemoryDoc): EmbeddedMemory {
     content: doc.content,
     embedding: doc.embedding,
     status: doc.status,
+    ...(doc.invalidationReason !== undefined ? { invalidationReason: doc.invalidationReason } : {}),
     reliability: doc.reliability,
     updatedAtTick: doc.updatedAtTick,
     scope: {
@@ -51,6 +52,7 @@ export function toMemoryDoc(
       assets: [...memory.scope.assets],
     },
     status: memory.status,
+    ...(memory.invalidationReason !== undefined ? { invalidationReason: memory.invalidationReason } : {}),
     version: extras?.version ?? 1,
   };
 }

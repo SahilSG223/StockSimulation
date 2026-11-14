@@ -28,8 +28,13 @@ export const EVAL_ARCHETYPES = [
 
 export type ProposedOrder = { symbol: string; side: OrderSide; quantity: number };
 
-/** One memory as surfaced to a decision, with the score that retrieved it. */
-export type RetrievedMemory = {
+/**
+ * One memory as surfaced to a decision, with the score that retrieved it.
+ * Distinct from `src/agents/retrieved-memory.ts`'s `RetrievedMemory` (a
+ * flattened card for the decision model) — this is the eval harness's own
+ * policy-facing shape, wrapping the full governance `MemoryRecord`.
+ */
+export type EvalRetrievedMemory = {
   memory: MemoryRecord;
   retrievalScore: number;
 };
@@ -48,10 +53,13 @@ export type DecisionContext = {
   history: ReadonlyMap<string, readonly number[]>;
   portfolio: PortfolioSnapshot;
   sectorOf: (symbol: string) => string | undefined;
-  /** Regime inferred from visible prices — never the engine's ground-truth label. */
-  regimeEstimate: string;
+  /**
+   * Regime inferred from visible prices (src/market estimateRegime) — never the
+   * engine's ground-truth label. Undefined until there is enough history.
+   */
+  regimeEstimate: string | undefined;
   /** Retrieved memories for this decision; `[]` means memory is withheld. */
-  memories: readonly RetrievedMemory[];
+  memories: readonly EvalRetrievedMemory[];
 };
 
 export type Decision = {

@@ -15,6 +15,7 @@ export function createAgent(options: {
   agentId: string;
   archetype: Archetype;
   simulation: RuntimeOptions["simulation"];
+  observeMarket?: RuntimeOptions["observeMarket"];
   mode?: "llm" | "baseline";
   /** Defaults to `AGENT_MODEL` via `getAgentModel()`. */
   model?: string;
@@ -36,6 +37,7 @@ export function createAgent(options: {
     agentId: options.agentId,
     simulation: options.simulation,
     decide,
+    ...(options.observeMarket ? { observeMarket: options.observeMarket } : {}),
     ...(options.mode !== "baseline" && options.retrieveMemories
       ? { retrieveMemories: options.retrieveMemories }
       : {}),

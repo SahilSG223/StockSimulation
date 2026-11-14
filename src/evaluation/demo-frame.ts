@@ -4,6 +4,8 @@
  * from the sample file, so it must match exactly (`.strict()`).
  */
 import { z } from "zod";
+import { MEMORY_STATUSES } from "../memory/vector-schema.js";
+import { SHOCK_PRESETS } from "../simulation/shock-library.js";
 import { ORDER_SIDES } from "../simulation/types.js";
 
 export const DEMO_FRAME_PHASES = [
@@ -20,7 +22,9 @@ const memoryFiredSchema = z
     id: z.string().min(1),
     content: z.string(),
     retrievalScore: z.number().finite(),
-    status: z.enum(["active", "invalidated", "superseded", "under_review", "expired"]),
+    status: z.enum(MEMORY_STATUSES),
+    /** Why the status/reliability last changed — present once governance has acted. */
+    reason: z.string().optional(),
   })
   .strict();
 
@@ -62,7 +66,11 @@ export const demoFrameSchema = z
 
 export type DemoFrame = z.infer<typeof demoFrameSchema>;
 
-export const chaosPlanEntrySchema = z.object({ preset: z.string(), tick: z.number() }).strict();
+const SHOCK_PRESET_IDS = Object.keys(SHOCK_PRESETS) as [string, ...string[]];
+
+export const chaosPlanEntrySchema = z
+  .object({ preset: z.enum(SHOCK_PRESET_IDS), tick: z.number() })
+  .strict();
 
 export const demoResultSchema = z
   .object({

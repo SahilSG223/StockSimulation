@@ -10,16 +10,16 @@ import {
   MongoVectorMemory,
   OpenAIEmbedder,
   consolidateExperienceToMemory,
+  quickRegimeLabel,
   recordTradeExperience,
+  scoreLessonOutcome,
 } from "../memory/index.js";
 import { MarketEngine, REGIME_PARAMS, SIMULATION_VERSION } from "../simulation/index.js";
-import { ARCHETYPES, type Archetype } from "./archetypes.js";
 import { createAgent } from "./create-agent.js";
 import { AGENT_PROMPT_VERSION, createOpenAIChatClient } from "./llm-provider.js";
 import { retrieveForDecision } from "./memory-retrieve.js";
+import { readAgentRunPlan } from "./run-config.js";
 
-const SEED = 42;
-const TICKS = 3;
 /** Max past experiences per agent considered for embedding backfill. */
 const BACKFILL_LIMIT = 200;
 
@@ -27,8 +27,28 @@ const BACKFILL_LIMIT = 200;
 const progress: { simulationId?: string; agentId?: string; tick?: number } = {};
 
 async function main(): Promise<void> {
+  const plan = readAgentRunPlan();
+  console.log(
+    JSON.stringify({
+      type: "run_plan",
+      seed: plan.seed,
+      ticks: plan.ticks,
+      warmupTicks: plan.warmupTicks,
+      decisionTicks: plan.decisionTicks,
+      agents: plan.agents,
+      expectedDecisionCalls: plan.expectedDecisionCalls,
+      scenario: plan.scenario,
+      chaosPlan: plan.chaosPlan,
+      regimeChanges: plan.regimeChanges,
+      dryRun: plan.dryRun,
+      note: "Decision calls exclude embeddings and backfill. No decision calls during warm-up.",
+    }),
+  );
+  if (plan.dryRun) return;
   const model = getAgentModel();
-  const simulation = new MarketEngine({ seed: SEED });
+  const simulation = new MarketEngine({ seed: plan.seed });
+  for (const event of plan.events) simulation.scheduleEvent(event);
+  for (const change of plan.regimeChanges) simulation.setRegime(change.regime, change.tick);
   // Advance time through the feed so the regime estimate sees every price.
   const feed = new MarketFeed(simulation);
   const simulationId = randomUUID();
@@ -36,7 +56,7 @@ async function main(): Promise<void> {
   // Private id per agent instance so runs never share history by accident.
   // Set AGENT_RUN_LABEL to reuse the same agents' memory across runs on purpose.
   const runLabel = process.env.AGENT_RUN_LABEL?.trim() || simulationId.slice(0, 8);
-  const archetypes = Object.keys(ARCHETYPES) as Archetype[];
+  const archetypes = plan.agents;
   const agentIds = new Map(archetypes.map((a) => [a, `${a}-${runLabel}`]));
 
   const db = await getDb();
@@ -53,13 +73,18 @@ async function main(): Promise<void> {
   const runRecord = {
     simulationId,
     startedAt: new Date().toISOString(),
-    seed: SEED,
-    ticks: TICKS,
+    seed: plan.seed,
+    ticks: plan.ticks,
+    warmupTicks: plan.warmupTicks,
+    decisionTicks: plan.decisionTicks,
+    expectedDecisionCalls: plan.expectedDecisionCalls,
+    chaos: { scenario: plan.scenario, offsetTicks: plan.chaosOffsetTicks, plan: plan.chaosPlan },
     simulationVersion: SIMULATION_VERSION,
     market: {
       config: simulation.config,
       regimeParams: REGIME_PARAMS,
       events: simulation.getEvents(),
+      regimeChanges: plan.regimeChanges,
     },
     agents: {
       provider: "openai",
@@ -86,6 +111,9 @@ async function main(): Promise<void> {
     .collection<typeof runRecord & { _id: string }>(COLLECTIONS.simulations)
     .insertOne({ _id: simulationId, ...runRecord });
 
+  // Consecutive regime-mismatched losing outcomes per lesson id (same rule as
+  // EvalMemoryStore.recordOutcome, src/evaluation/memory-lab.ts).
+  const lessonLossStreak = new Map<string, number>();
   const agents = [];
   for (const archetype of archetypes) {
     const agentId = agentIds.get(archetype)!;
@@ -99,6 +127,7 @@ async function main(): Promise<void> {
         agentId,
         archetype,
         simulation,
+        observeMarket: () => feed.observe(),
         model,
         client,
         onLlmCall: (call) =>
@@ -117,9 +146,21 @@ async function main(): Promise<void> {
     });
   }
 
-  for (let tick = 0; tick < TICKS; tick++) {
+  // Warm public feature history without paid decisions or empty-regime lessons.
+  for (let tick = 0; tick < plan.warmupTicks; tick++) feed.step();
+  console.log(
+    JSON.stringify({
+      type: "warmup_complete",
+      simulationId,
+      tick: simulation.tick,
+      regimeEstimate: feed.observe().regimeEstimate,
+    }),
+  );
+
+  while (simulation.tick < plan.ticks) {
     // Inferred from observed prices only; absent until there is enough history.
-    const regimeEstimate = feed.observe().regimeEstimate ?? "";
+    const regimeEstimate = feed.observe().regimeEstimate;
+    if (regimeEstimate === undefined) throw new Error("Regime estimate unavailable after warm-up");
     // Finish every agent's decision before advancing the shared market.
     for (const { agentId, runtime } of agents) {
       progress.agentId = agentId;
@@ -148,7 +189,49 @@ async function main(): Promise<void> {
       if (experience.outcome.fills.length > 0) {
         await consolidateExperienceToMemory({ index: lessons, experience });
       }
-      console.log(JSON.stringify({ type: "cycle", simulationId, ...record }));
+      // Evidence-based governance: score every lesson this decision cited.
+      // Preserve main's fast observed-only governance proxy. Lesson tagging
+      // and retrieval use the warmed-up MarketFeed estimate above.
+      const quickRegime = quickRegimeLabel(feed.observe().features.index.return1);
+      const won = record.portfolioAfter.unrealizedPnl >= 0;
+      for (const memoryId of record.decision.memoryReferences) {
+        const lesson = await lessons.get(agentId, memoryId);
+        if (!lesson || lesson.status !== "active") continue;
+        const outcome = scoreLessonOutcome({
+          reliability: lesson.reliability,
+          scopeRegimes: lesson.scope.regimes,
+          regimeEstimate: quickRegime,
+          won,
+          lossStreak: lessonLossStreak.get(memoryId) ?? 0,
+          atTick: record.observation.tick,
+        });
+        lessonLossStreak.set(memoryId, outcome.lossStreak);
+        if (outcome.action === "invalidate") {
+          await lessons.invalidate(agentId, memoryId, outcome.reason, record.observation.tick);
+        } else {
+          await lessons.upsert({
+            id: memoryId,
+            agentId,
+            content: lesson.content,
+            updatedAtTick: record.observation.tick,
+            reliability: outcome.reliability,
+            embedding: lesson.embedding,
+            scope: lesson.scope,
+          });
+        }
+        console.log(
+          JSON.stringify({
+            type: "governance",
+            simulationId,
+            agentId,
+            memoryId,
+            action: outcome.action,
+            reliability: outcome.reliability,
+            ...(outcome.action === "invalidate" ? { reason: outcome.reason } : {}),
+          }),
+        );
+      }
+      console.log(JSON.stringify({ type: "cycle", simulationId, regimeEstimate, ...record }));
     }
     feed.step();
   }
@@ -170,6 +253,14 @@ async function main(): Promise<void> {
             .map((position) => `${position.symbol}: ${position.quantity}`)
             .join(", ") || "none",
       };
+    }),
+  );
+  console.log(
+    JSON.stringify({
+      type: "run_completed",
+      simulationId,
+      tick: simulation.tick,
+      expectedDecisionCalls: plan.expectedDecisionCalls,
     }),
   );
 }

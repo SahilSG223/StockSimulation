@@ -67,7 +67,7 @@ describe("MemoryIndex", () => {
         assets: ["SEMI"],
       },
     });
-    index.invalidate("a1", m.id);
+    index.invalidate("a1", m.id, "stale after regime change", 50);
 
     const hits = await index.search({
       agentId: "a1",

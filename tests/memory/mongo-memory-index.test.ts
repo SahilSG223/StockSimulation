@@ -38,13 +38,14 @@ describe("MongoMemoryIndex (offline)", () => {
     const record = await index.upsert({ agentId: "a1", content: "x", updatedAtTick: 1 });
 
     await expect(index.get("a2", record.id)).resolves.toBeUndefined();
-    await expect(index.invalidate("a2", record.id)).rejects.toThrow(/no memory/);
+    await expect(index.invalidate("a2", record.id, "wrong agent", 1)).rejects.toThrow(/no memory/);
 
     const stillActive = await index.get("a1", record.id);
     expect(stillActive?.status).toBe("active");
 
-    const invalidated = await index.invalidate("a1", record.id);
+    const invalidated = await index.invalidate("a1", record.id, "lost money", 1);
     expect(invalidated?.status).toBe("invalidated");
+    expect(invalidated?.invalidationReason).toBe("lost money");
   });
 
   it("search filters agentId+active in Mongo before rankWithEmbeddings", async () => {
@@ -54,7 +55,7 @@ describe("MongoMemoryIndex (offline)", () => {
       content: "buy semis in bull",
       updatedAtTick: 1,
     });
-    await index.invalidate("a1", record.id);
+    await index.invalidate("a1", record.id, "lost money", 1);
 
     const results = await index.search({ agentId: "a1", query: "buy semis in bull", ctx: { tick: 5 } });
     expect(results).toHaveLength(0);

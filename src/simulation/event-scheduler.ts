@@ -1,6 +1,9 @@
 import type { MarketEvent, PublicEventInfo } from "./types.js";
 
-/** Schedules events and resolves which are active at a given tick. */
+/**
+ * Schedules events and resolves which are active at a given tick. Everything
+ * returned is a copy: callers can never change the events that drive prices.
+ */
 export class EventScheduler {
   private readonly events: MarketEvent[] = [];
 
@@ -20,12 +23,12 @@ export class EventScheduler {
 
   /** Events whose [tick, tick+duration) window covers `tick`. */
   activeAt(tick: number): MarketEvent[] {
-    return this.events.filter((e) => tick >= e.tick && tick < e.tick + e.duration);
+    return structuredClone(this.events.filter((e) => tick >= e.tick && tick < e.tick + e.duration));
   }
 
   /** Full events (includes ground-truth effects) — evaluation / engine only. */
   all(): readonly MarketEvent[] {
-    return this.events;
+    return structuredClone(this.events);
   }
 
   /** Public view for agent observations — no effect fields. */
@@ -47,11 +50,12 @@ export function toPublicInfo(event: MarketEvent): PublicEventInfo {
     headline: event.publicInfo.headline,
     summary: event.publicInfo.summary,
   };
+  // Copy arrays so a caller editing the public view can't retarget the event.
   if (event.affectedSymbols !== undefined) {
-    info.affectedSymbols = event.affectedSymbols;
+    info.affectedSymbols = [...event.affectedSymbols];
   }
   if (event.affectedSectors !== undefined) {
-    info.affectedSectors = event.affectedSectors;
+    info.affectedSectors = [...event.affectedSectors];
   }
   return info;
 }
