@@ -65,8 +65,8 @@ phase, then move on. Prefer end-to-end vertical slices over perfect subsystems.
 - [x] Order submit → validate → fill/reject → portfolio/cash update
 - [x] Authoritative P&L from engine only (unit tests for fill + cash)
 
-**Status:** landed on `feat/phase1-simulation` (`src/simulation/`, 19 tests).
-Merge to `main`, then Agents/Memory start against exported types.
+**Status:** merged to `main` (`src/simulation/`). Model locked by
+`tests/simulation/golden-trajectory.test.ts`; versioned by `SIMULATION_VERSION`.
 
 ### Phase 2 — Autonomous agents
 

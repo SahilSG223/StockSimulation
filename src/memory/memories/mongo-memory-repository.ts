@@ -28,6 +28,12 @@ export class MongoMemoryRepository {
     return this.collection.find({ agentId, status: "active" }).toArray();
   }
 
+  /** Any status (not just active) — filtered by agentId regardless. */
+  async findForAgent(agentId: string, id: string): Promise<MemoryDoc | undefined> {
+    const doc = await this.collection.findOne({ _id: id, agentId } as Filter<MemoryDoc>);
+    return doc ?? undefined;
+  }
+
   async updateForAgent(
     agentId: string,
     id: string,

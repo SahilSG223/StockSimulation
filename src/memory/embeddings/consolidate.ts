@@ -1,13 +1,18 @@
 import type { ExperienceRecord } from "../experiences/types.js";
-import type { MemoryIndex } from "./memory-index.js";
+import type { UpsertMemoryInput } from "./memory-index.js";
 import type { EmbeddedMemory } from "./types.js";
+
+/** Satisfied by both `MemoryIndex` and `MongoMemoryIndex` — only `upsert` is used here. */
+type MemoryWriter = {
+  upsert(input: UpsertMemoryInput): Promise<EmbeddedMemory>;
+};
 
 /**
  * Naive consolidation: turn one episodic experience into a semantic lesson string,
  * embed it, and upsert into the vector index. Governance can later invalidate it.
  */
 export async function consolidateExperienceToMemory(args: {
-  index: MemoryIndex;
+  index: MemoryWriter;
   experience: ExperienceRecord;
   /** Override auto-generated lesson text. */
   lesson?: string;
