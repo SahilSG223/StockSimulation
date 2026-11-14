@@ -2,18 +2,21 @@ import { randomUUID } from "node:crypto";
 import { getAgentModel } from "../config.js";
 import { getDb } from "../database/client.js";
 import { COLLECTIONS } from "../database/collections.js";
+import { MarketFeed } from "../market/market-feed.js";
 import {
   MEMORY_CONTENT_VERSION,
   MongoExperienceStore,
+  MongoMemoryIndex,
   MongoVectorMemory,
   OpenAIEmbedder,
+  consolidateExperienceToMemory,
   recordTradeExperience,
 } from "../memory/index.js";
 import { MarketEngine, REGIME_PARAMS, SIMULATION_VERSION } from "../simulation/index.js";
 import { ARCHETYPES, type Archetype } from "./archetypes.js";
 import { createAgent } from "./create-agent.js";
 import { AGENT_PROMPT_VERSION, createOpenAIChatClient } from "./llm-provider.js";
-import { memoryQuery } from "./memory-query.js";
+import { retrieveForDecision } from "./memory-retrieve.js";
 
 const SEED = 42;
 const TICKS = 3;
@@ -26,6 +29,8 @@ const progress: { simulationId?: string; agentId?: string; tick?: number } = {};
 async function main(): Promise<void> {
   const model = getAgentModel();
   const simulation = new MarketEngine({ seed: SEED });
+  // Advance time through the feed so the regime estimate sees every price.
+  const feed = new MarketFeed(simulation);
   const simulationId = randomUUID();
   progress.simulationId = simulationId;
   // Private id per agent instance so runs never share history by accident.
@@ -37,6 +42,9 @@ async function main(): Promise<void> {
   const db = await getDb();
   const store = new MongoExperienceStore(db);
   const embedder = new OpenAIEmbedder();
+  // Decisions retrieve governed lessons (lifecycle- and reliability-aware), the
+  // memory the A/B/C evaluation measures. Experience vectors are the episodic layer.
+  const lessons = new MongoMemoryIndex(db, embedder);
   const vectors = new MongoVectorMemory(db, embedder);
   const client = createOpenAIChatClient();
   const sectorOf = new Map(simulation.config.assets.map((asset) => [asset.symbol, asset.sector]));
@@ -64,6 +72,9 @@ async function main(): Promise<void> {
       store: "mongodb",
       experiences: COLLECTIONS.experiences,
       vectors: COLLECTIONS.experienceVectors,
+      lessons: COLLECTIONS.memories,
+      retrieval: "governed lessons (MongoMemoryIndex + rankWithEmbeddings)",
+      consolidation: "experiences with fills become lessons",
       embeddingModel: embedder.model,
       embeddingDimensions: embedder.dimensions,
       contentVersion: MEMORY_CONTENT_VERSION,
@@ -101,12 +112,14 @@ async function main(): Promise<void> {
             }),
           ),
         retrieveMemories: (context) =>
-          vectors.retrieve(memoryQuery(context, simulationId, archetype)),
+          retrieveForDecision({ index: lessons, agentId, ctx: context }),
       }),
     });
   }
 
   for (let tick = 0; tick < TICKS; tick++) {
+    // Inferred from observed prices only; absent until there is enough history.
+    const regimeEstimate = feed.observe().regimeEstimate ?? "";
     // Finish every agent's decision before advancing the shared market.
     for (const { agentId, runtime } of agents) {
       progress.agentId = agentId;
@@ -118,7 +131,7 @@ async function main(): Promise<void> {
         simulationId,
         tick: record.observation.tick,
         market: {
-          regime: "", // Ground-truth regimes are not part of the agent's observation.
+          regime: regimeEstimate, // Never the engine's true regime.
           prices: record.observation.prices,
           eventIds: record.observation.events.map((event) => event.id),
           eventTypes: [...new Set(record.observation.events.map((event) => event.type))],
@@ -130,9 +143,14 @@ async function main(): Promise<void> {
           record.portfolioAfter.realizedPnl - record.observation.portfolio.realizedPnl,
       });
       await vectors.remember(experience, model);
+      // Only trades that executed carry a lesson; holds and rejections stay episodic.
+      // Governance can later narrow or invalidate the lesson.
+      if (experience.outcome.fills.length > 0) {
+        await consolidateExperienceToMemory({ index: lessons, experience });
+      }
       console.log(JSON.stringify({ type: "cycle", simulationId, ...record }));
     }
-    simulation.step();
+    feed.step();
   }
 
   console.log(`Final agent portfolios at tick ${simulation.tick} (run ${simulationId})`);

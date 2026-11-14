@@ -54,7 +54,7 @@ export type VectorMemoryDocument = z.infer<typeof vectorMemorySchema>;
  * `rankWithEmbeddings`). `retrievalScore` is that ranker's documented
  * composite, not a calibrated probability.
  */
-export const retrievedMemorySchema = vectorMemorySchema
+export const retrievedExperienceSchema = vectorMemorySchema
   .omit({ embedding: true })
   .extend({
     semanticSimilarity: z.number().finite().min(-1).max(1),
@@ -63,8 +63,8 @@ export const retrievedMemorySchema = vectorMemorySchema
     retrievalScore: z.number().finite().nonnegative(),
   })
   .strict();
-export type RetrievedMemory = z.infer<typeof retrievedMemorySchema>;
-export const retrievedMemoriesSchema = z.array(retrievedMemorySchema).max(5);
+export type RetrievedExperience = z.infer<typeof retrievedExperienceSchema>;
+export const retrievedExperiencesSchema = z.array(retrievedExperienceSchema).max(5);
 
 export const vectorQuerySchema = z
   .object({

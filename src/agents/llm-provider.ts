@@ -6,9 +6,11 @@ import { decisionSchema } from "./decision-schema.js";
 import { llmDecisionJsonSchema, openAiDecisionResponseSchema } from "./llm-schema.js";
 import type { DecisionProvider } from "./runtime.js";
 
-export const AGENT_PROMPT_VERSION = "llm-agent-v4";
+export const AGENT_PROMPT_VERSION = "llm-agent-v5";
 
 const REQUEST_TIMEOUT_MS = 60_000;
+/** Upper bound on retrieved memories sent to the model (prompt size and attention). */
+export const MAX_MEMORIES_IN_PROMPT = 5;
 
 /**
  * The slice of the OpenAI SDK the agents use, so tests can inject a stub.
@@ -64,6 +66,12 @@ export function createLlmProvider(options: {
   ].join("\n\n");
 
   return async (context) => {
+    // Fail closed before the model call rather than truncating silently.
+    if ((context.memories?.length ?? 0) > MAX_MEMORIES_IN_PROMPT) {
+      throw new Error(
+        `Too many retrieved memories for one decision (max ${MAX_MEMORIES_IN_PROMPT})`,
+      );
+    }
     const user = JSON.stringify({
       ...context,
       baselineSuggestion: await baseline(structuredClone(context)),

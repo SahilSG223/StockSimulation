@@ -84,12 +84,23 @@ from another run is not penalised for age.
 2. Gives each agent a private id: `<archetype>-<run label>`. The label defaults
    to a run-scoped suffix, so runs never share history by accident. Set
    `AGENT_RUN_LABEL` to reuse the same agents' memory across runs on purpose.
-3. Backfills vectors for that id only: its latest 200 experiences, embedding
-   only those without a vector, in one batch.
-4. Before each decision, retrieves memories as above; after it, records the
-   engine outcome and embeds the new experience.
-5. Logs one `llm_call` line per model call (provider, model, latency, token
+3. Backfills experience vectors for that id only: its latest 200 experiences,
+   embedding only those without a vector, in one batch.
+4. Before each decision, retrieves **governed lessons**:
+   `retrieveForDecision` over `MongoMemoryIndex` (`memories` collection). Only
+   `active` lessons are returned, ranked by `rankWithEmbeddings` (semantic,
+   contextual, temporal, reliability). This is the memory the A/B/C evaluation
+   measures, so invalidating or narrowing a lesson changes what agents see.
+5. After the decision, records the engine outcome and embeds the experience
+   (episodic layer). Experiences whose orders filled are consolidated into a
+   lesson; holds and rejections stay episodic. Lessons are tagged with the
+   inferred `regimeEstimate` from `MarketFeed`, never the engine's true regime.
+6. Logs one `llm_call` line per model call (provider, model, latency, token
    usage, outcome).
+
+The experience vector search above (`MongoVectorMemory.retrieve`) is not used at
+decision time; it stays available for episodic search and is verified by
+`pnpm memory:prepare`.
 
 On failure it prints a sanitized error with the run id, agent and tick. There
 is no baseline fallback and no automatic retry: orders submitted earlier in the

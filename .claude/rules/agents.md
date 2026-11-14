@@ -3,10 +3,11 @@
 ## Decision cycle
 
 1. Receive structured market observation
-2. Retrieve + evaluate memories
+2. Retrieve + evaluate memories (`retrieveMemories` on `AgentRuntime`; omit for baseline A)
 3. Interpret conditions → propose validated orders
-4. Submit to simulation → receive authoritative result
-5. Record experience → consolidate memories when justified
+4. Citations must be subset of retrieved ids (fail closed before submit)
+5. Submit to simulation → receive authoritative result
+6. Record experience → consolidate memories when justified
 
 ## Prompts
 

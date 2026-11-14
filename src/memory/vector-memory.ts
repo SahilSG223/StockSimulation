@@ -8,10 +8,10 @@ import {
   DEFAULT_EXPERIENCE_RELIABILITY,
   MEMORY_CONTENT_VERSION,
   embeddingVectorSchema,
-  retrievedMemorySchema,
+  retrievedExperienceSchema,
   vectorMemorySchema,
   vectorQuerySchema,
-  type RetrievedMemory,
+  type RetrievedExperience,
   type VectorMemoryDocument,
   type VectorMemoryQuery,
 } from "./vector-schema.js";
@@ -117,7 +117,7 @@ export class MongoVectorMemory {
     await this.rememberMissing(experience.agentId, [experience], decisionModel);
   }
 
-  async retrieve(input: VectorMemoryQuery): Promise<RetrievedMemory[]> {
+  async retrieve(input: VectorMemoryQuery): Promise<RetrievedExperience[]> {
     const query = vectorQuerySchema.parse(input);
     const queryEmbedding = this.validVector(await this.embedder.embed(query.content));
     let docs: unknown[];
@@ -177,7 +177,7 @@ export class MongoVectorMemory {
       .slice(0, RETURNED_MEMORIES)
       .map((ranked) => {
         const { embedding: _embedding, ...stored } = byId.get(ranked.memory.id)!;
-        return retrievedMemorySchema.parse({
+        return retrievedExperienceSchema.parse({
           ...stored,
           semanticSimilarity: ranked.semanticSimilarity,
           contextualApplicability: ranked.contextualApplicability,

@@ -4,10 +4,10 @@ export {
   DEFAULT_EXPERIENCE_RELIABILITY,
   MEMORY_CONTENT_VERSION,
   MEMORY_STATUSES,
-  retrievedMemoriesSchema,
-  retrievedMemorySchema,
+  retrievedExperiencesSchema,
+  retrievedExperienceSchema,
   vectorQuerySchema,
-  type RetrievedMemory,
+  type RetrievedExperience,
   type VectorMemoryDocument,
   type VectorMemoryQuery,
 } from "./vector-schema.js";
