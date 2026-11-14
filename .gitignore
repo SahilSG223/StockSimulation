@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+.pnpm-store
+
+# Build
+dist/
+build/
+.next/
+.turbo/
+*.tsbuildinfo
+
+# Env / secrets — never commit real values
+.env
+.env.*
+!.env.example
+*.pem
+*.p8
+credentials.json
+service-account*.json
+
+# Test / coverage
+coverage/
+.nyc_output/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Local experiment dumps
+tmp/
+.data/
