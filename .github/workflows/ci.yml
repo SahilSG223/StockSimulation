@@ -12,7 +12,8 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Hackathon budget: fail fast, never sit for hours.
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
 
@@ -28,5 +29,5 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      - name: Check
+      - name: Typecheck + test + lint
         run: pnpm check

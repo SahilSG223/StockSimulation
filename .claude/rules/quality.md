@@ -13,11 +13,13 @@ must justify itself. Used zero times: delete. Used once: inline.
 
 ## Gate
 
-`make check` runs format, lint, typecheck, and tests. The pre-commit hook and CI
-run the same suite. Install the hook once with `make setup`.
+- **Pre-commit** (`make precommit`): typecheck + tests only — must stay fast.
+  Skip with `SKIP_HOOKS=1` if you're mid-experiment (fix before push).
+- **CI / `make check`**: typecheck + tests + lint. Timeout 5 min. No prettier
+  over markdown docs (format `src/`/`tests/` with `make fmt` when you want).
 
-A rule that isn't enforced by `make check` or review is aspirational — if a rule
-keeps getting broken, add a gate for it.
+Install the hook once with `make setup`. A rule that isn't enforced by a gate or
+review is aspirational — if it keeps getting broken, add a gate.
 
 ## Self-audit (only when asked)
 

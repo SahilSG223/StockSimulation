@@ -2,3 +2,6 @@ pnpm-lock.yaml
 dist/
 coverage/
 node_modules/
+# Docs are human-edited; don't block commits on markdown wrap fights.
+docs/
+*.md

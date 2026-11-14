@@ -10,18 +10,20 @@ to improve decisions without clinging to stale or misleading lessons. The market
 sim is the lab — the product is memory governance + evaluation that shows it
 changes behavior under shocks and regime shifts.
 
-## Workstreams
+## Workstreams (4 people)
 
-| Stream            | Owns                                                                | Owner |
-| ----------------- | ------------------------------------------------------------------- | ----- |
-| **Simulation**    | Seeded prices, events, orders/fills, portfolios, clock              | _TBD_ |
-| **Agents**        | Archetypes, decision cycle, Zod I/O, LLM calls                      | _TBD_ |
-| **Memory**        | Experiences, embeddings, retrieval, governance, `agentId` isolation | _TBD_ |
-| **Evaluation**    | Baselines A/B/C, scenarios, metrics, experiment runner              | _TBD_ |
-| **Frontend/Demo** | Charts, portfolios, decisions + which memories influenced them      | _TBD_ |
+Five concerns, four people: **Eval + Demo** is one seat. Swap names in the
+Owner column if needed — keep the path ownership.
 
-Fill owners in the table on day 1. One person can wear two hats early; avoid
-three people editing the same `src/` tree at once.
+| Stream | Owns | Owner | Day-1 deliverable |
+| --- | --- | --- | --- |
+| **Simulation** | Seeded prices, events, orders/fills, portfolios, clock, `src/market/` observations | **Daniel** | Phase 1 green on `main`; shared `Order`/`Tick`/`Asset` types |
+| **Agents** | Archetypes, decision cycle, Zod I/O, LLM calls → `src/agents/` | **Person B** | Zod decision schema + 1 archetype submitting orders into sim (no memory) |
+| **Memory** | Experiences, embeddings, retrieval, governance, `agentId` isolation → `src/memory/` | **Person C** | Experience write + `agentId`-scoped read API (ranking can be naive) |
+| **Eval + Demo** | Baselines A/B/C, scenarios, metrics + dashboard showing memory influence → `src/evaluation/` + `app/` | **Person D** | Scenario config + seed recording; stub UI or CLI that prints decision + memory refs |
+
+Replace Person B/C/D with real names in the first standup. Do not three people
+edit the same `src/` tree.
 
 ## File ownership (`src/`)
 
@@ -33,10 +35,10 @@ Stay in your lane so merges stay boring.
 | `src/market/`     | Simulation (+ Agents consumers) | Observations / features; no strategy logic               |
 | `src/agents/`     | Agents                          | Runtime, archetypes, prompts, decision schemas           |
 | `src/memory/`     | Memory                          | Experiences, semantic store, governance, retrieval       |
-| `src/evaluation/` | Evaluation                      | Scenarios, baselines, metrics, reports                   |
+| `src/evaluation/` | Eval + Demo                     | Scenarios, baselines, metrics, reports                   |
 | `src/database/`   | Shared (coordinate)             | Schemas/repos only — no business policy                  |
-| `src/api/`        | Demo / later                    | Thin; do not invent sim truth here                       |
-| `app/`            | Frontend/Demo                   | Observability UI; never authoritative P&L                |
+| `src/api/`        | Eval + Demo / later             | Thin; do not invent sim truth here                       |
+| `app/`            | Eval + Demo                     | Observability UI; never authoritative P&L                |
 
 **Dependency direction:** `app` → agents/evaluation → memory/market →
 simulation/database.
@@ -54,16 +56,16 @@ phase, then move on. Prefer end-to-end vertical slices over perfect subsystems.
 
 ### Phase 1 — Deterministic simulation (do this first)
 
-- [ ] Seeded PRNG price path for a small asset universe (same seed → same
+- [x] Seeded PRNG price path for a small asset universe (same seed → same
       trajectory)
-- [ ] Simulation clock advances ticks; regimes/params configurable
-- [ ] At least one scheduled shock/event with **actual** effect + **public**
+- [x] Simulation clock advances ticks; regimes/params configurable
+- [x] At least one scheduled shock/event with **actual** effect + **public**
       info for agents
-- [ ] Order submit → validate → fill/reject → portfolio/cash update
-- [ ] Authoritative P&L from engine only (unit tests for fill + cash)
+- [x] Order submit → validate → fill/reject → portfolio/cash update
+- [x] Authoritative P&L from engine only (unit tests for fill + cash)
 
-**Done when:** `make check` green; a CLI/script runs N ticks with seed `S` twice
-and prints identical prices + portfolio end state.
+**Status:** landed on `feat/phase1-simulation` (`src/simulation/`, 19 tests).
+Merge to `main`, then Agents/Memory start against exported types.
 
 ### Phase 2 — Autonomous agents
 
@@ -179,7 +181,9 @@ Ship a thin vertical slice that proves governed memory under stress.
 
 ## Working agreements
 
-- **pnpm only**; `make check` before every commit
+- **pnpm only** (`make setup` once so hooks don’t re-download pnpm via npx)
+- **Pre-commit** = typecheck + test (`make precommit`). Full lint = CI /
+  `make check`. Escape hatch: `SKIP_HOOKS=1 git commit`
 - Simulation owns money & fills; agents propose; memory never replaces price
   queries with embeddings
 - Prefer one concern per PR; update `.claude/rules/` when the team corrects

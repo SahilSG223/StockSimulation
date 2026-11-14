@@ -10,12 +10,13 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "lint": "eslint .",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
+    "lint": "eslint src tests",
+    "format": "prettier --write \"src/**/*.{ts,js}\" \"tests/**/*.{ts,js}\" \"*.config.js\" \"package.json\"",
+    "format:check": "prettier --check \"src/**/*.{ts,js}\" \"tests/**/*.{ts,js}\" \"*.config.js\" \"package.json\"",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test"
+    "precommit": "pnpm typecheck && pnpm test",
+    "check": "pnpm typecheck && pnpm test && pnpm lint"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

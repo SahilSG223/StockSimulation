@@ -43,7 +43,8 @@ Do not use npm or yarn in this repo.
 
 ## Working agreement
 
-1. One concern per PR.
-2. `make check` must pass before merge (CI enforces the same suite).
+1. One concern per PR. Owners: see [`docs/plan.md`](docs/plan.md).
+2. Pre-commit runs **typecheck + tests** only. CI (`make check`) adds lint;
+   5‑minute timeout. Use `SKIP_HOOKS=1` only for throwaway commits.
 3. When someone corrects “how we work,” update `.claude/rules/` or docs in the
    same PR — not personal assistant memory.
