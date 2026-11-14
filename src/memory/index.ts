@@ -1,4 +1,4 @@
-/** Memory package — experiences lane (governance is a sibling PR). */
+/** Memory package — experiences + governance lanes. */
 export {
   ExperienceStore,
   marketContextFromObservation,
@@ -17,3 +17,26 @@ export {
   type RecordTradeExperienceInput,
   type SectorLookup,
 } from "./experiences/index.js";
+export {
+  DEFAULT_WEIGHTS,
+  contextualApplicability,
+  handleContradiction,
+  invalidateMemory,
+  isRetrievable,
+  rankMemories,
+  roughSemanticSimilarity,
+  supersedeMemory,
+  temporalRelevance,
+  type ContradictionAction,
+  type ContradictionResult,
+  type LifecycleChange,
+  type MemoryId,
+  type MemoryRecord,
+  type MemoryScope,
+  type MemoryStatus,
+  type MemoryType,
+  type RankedMemory,
+  type RankingWeights,
+  type RetrievalContext,
+  // AgentId is identical to experiences' and already exported above.
+} from "./governance/index.js";
