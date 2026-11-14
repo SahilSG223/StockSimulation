@@ -12,13 +12,13 @@ changes behavior under shocks and regime shifts.
 
 ## Workstreams
 
-| Stream | Owns | Owner |
-| --- | --- | --- |
-| **Simulation** | Seeded prices, events, orders/fills, portfolios, clock | _TBD_ |
-| **Agents** | Archetypes, decision cycle, Zod I/O, LLM calls | _TBD_ |
-| **Memory** | Experiences, embeddings, retrieval, governance, `agentId` isolation | _TBD_ |
-| **Evaluation** | Baselines A/B/C, scenarios, metrics, experiment runner | _TBD_ |
-| **Frontend/Demo** | Charts, portfolios, decisions + which memories influenced them | _TBD_ |
+| Stream            | Owns                                                                | Owner |
+| ----------------- | ------------------------------------------------------------------- | ----- |
+| **Simulation**    | Seeded prices, events, orders/fills, portfolios, clock              | _TBD_ |
+| **Agents**        | Archetypes, decision cycle, Zod I/O, LLM calls                      | _TBD_ |
+| **Memory**        | Experiences, embeddings, retrieval, governance, `agentId` isolation | _TBD_ |
+| **Evaluation**    | Baselines A/B/C, scenarios, metrics, experiment runner              | _TBD_ |
+| **Frontend/Demo** | Charts, portfolios, decisions + which memories influenced them      | _TBD_ |
 
 Fill owners in the table on day 1. One person can wear two hats early; avoid
 three people editing the same `src/` tree at once.
@@ -27,16 +27,16 @@ three people editing the same `src/` tree at once.
 
 Stay in your lane so merges stay boring.
 
-| Path | Primary stream | Notes |
-| --- | --- | --- |
-| `src/simulation/` | Simulation | Prices, order book, execution, portfolios, events, clock |
-| `src/market/` | Simulation (+ Agents consumers) | Observations / features; no strategy logic |
-| `src/agents/` | Agents | Runtime, archetypes, prompts, decision schemas |
-| `src/memory/` | Memory | Experiences, semantic store, governance, retrieval |
-| `src/evaluation/` | Evaluation | Scenarios, baselines, metrics, reports |
-| `src/database/` | Shared (coordinate) | Schemas/repos only — no business policy |
-| `src/api/` | Demo / later | Thin; do not invent sim truth here |
-| `app/` | Frontend/Demo | Observability UI; never authoritative P&L |
+| Path              | Primary stream                  | Notes                                                    |
+| ----------------- | ------------------------------- | -------------------------------------------------------- |
+| `src/simulation/` | Simulation                      | Prices, order book, execution, portfolios, events, clock |
+| `src/market/`     | Simulation (+ Agents consumers) | Observations / features; no strategy logic               |
+| `src/agents/`     | Agents                          | Runtime, archetypes, prompts, decision schemas           |
+| `src/memory/`     | Memory                          | Experiences, semantic store, governance, retrieval       |
+| `src/evaluation/` | Evaluation                      | Scenarios, baselines, metrics, reports                   |
+| `src/database/`   | Shared (coordinate)             | Schemas/repos only — no business policy                  |
+| `src/api/`        | Demo / later                    | Thin; do not invent sim truth here                       |
+| `app/`            | Frontend/Demo                   | Observability UI; never authoritative P&L                |
 
 **Dependency direction:** `app` → agents/evaluation → memory/market →
 simulation/database.
