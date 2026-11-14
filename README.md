@@ -8,6 +8,7 @@ The simulated financial market is the **environment**, not the product. The
 product is governed memory + the evaluation framework that measures it.
 
 Full product/engineering spec: [`docs/PROJECT_SPEC.md`](docs/PROJECT_SPEC.md).
+Hackathon execution plan (workstreams + phases): [`docs/plan.md`](docs/plan.md).
 
 ## Quick start
 
