@@ -47,13 +47,17 @@ describe.skipIf(!live)("MongoMemoryRepository (live)", () => {
     const db = await getDb();
     const repo = new MongoMemoryRepository(db);
     const inserted = await repo.insert(baseDoc({ agentId: agentA }));
+    const id = inserted._id!;
 
-    await repo.updateForAgent(agentB, inserted._id!, { content: "hijacked" });
-    const [unchanged] = await repo.listActiveForAgent(agentA);
-    expect(unchanged?.content).toBe("test lesson");
+    // Fail closed: wrong agentId must not match (and must throw).
+    await expect(repo.updateForAgent(agentB, id, { content: "hijacked" })).rejects.toThrow(
+      /no memory/,
+    );
+    const afterHijack = (await repo.listActiveForAgent(agentA)).find((m) => m._id === id);
+    expect(afterHijack?.content).toBe("test lesson");
 
-    await repo.updateForAgent(agentA, inserted._id!, { content: "revised" });
-    const [changed] = await repo.listActiveForAgent(agentA);
-    expect(changed?.content).toBe("revised");
+    await repo.updateForAgent(agentA, id, { content: "revised" });
+    const afterOwner = (await repo.listActiveForAgent(agentA)).find((m) => m._id === id);
+    expect(afterOwner?.content).toBe("revised");
   });
 });

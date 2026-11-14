@@ -15,6 +15,11 @@ import type {
 
 type ExperienceDoc = ExperienceRecord & { _id: ExperienceId };
 
+function stripMongoId(doc: ExperienceDoc): ExperienceRecord {
+  const { _id: _ignored, ...record } = doc;
+  return record;
+}
+
 export class MongoExperienceStore {
   private readonly collection: Collection<ExperienceDoc>;
 
@@ -41,13 +46,14 @@ export class MongoExperienceStore {
 
   async get(id: ExperienceId): Promise<ExperienceRecord | undefined> {
     const doc = await this.collection.findOne({ _id: id } as Filter<ExperienceDoc>);
-    return doc ?? undefined;
+    return doc ? stripMongoId(doc) : undefined;
   }
 
   async getMany(ids: readonly ExperienceId[]): Promise<ExperienceRecord[]> {
-    return this.collection
+    const docs = await this.collection
       .find({ _id: { $in: [...ids] } } as Filter<ExperienceDoc>)
       .toArray();
+    return docs.map(stripMongoId);
   }
 
   listForAgent(agentId: AgentId): Promise<ExperienceRecord[]> {
@@ -85,6 +91,6 @@ export class MongoExperienceStore {
       cursor.limit(q.limit);
     }
     const rows = await cursor.toArray();
-    return rows.reverse();
+    return rows.reverse().map(stripMongoId);
   }
 }
