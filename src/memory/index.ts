@@ -1,6 +1,7 @@
 /** Memory package — experiences + governance lanes. */
 export {
   ExperienceStore,
+  MongoExperienceStore,
   marketContextFromObservation,
   recordTradeExperience,
   type AgentId,
@@ -17,6 +18,11 @@ export {
   type RecordTradeExperienceInput,
   type SectorLookup,
 } from "./experiences/index.js";
+export {
+  MongoMemoryRepository,
+  memoryDocSchema,
+  type MemoryDoc,
+} from "./memories/index.js";
 export {
   DEFAULT_WEIGHTS,
   contextualApplicability,
