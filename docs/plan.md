@@ -20,7 +20,9 @@ Owner column if needed — keep the path ownership.
 | **Memory** | Experiences, embeddings, retrieval, governance, `agentId` isolation → `src/memory/` | **Daniel** | Experience write + scoped read; then governance (stale/contradiction) — core thesis |
 | **Simulation** | Keep Phase 1 stable; market observations/features → `src/simulation/`, `src/market/` | **Person B** | Don’t rewrite engine; extend `observe()` / features only as agents need |
 | **Agents** | Archetypes, decision cycle, Zod I/O, LLM calls → `src/agents/` | **Person C** | Zod decision schema + 1 archetype submitting orders into sim (no memory first) |
-| **Eval + Demo** | Baselines A/B/C, scenarios, metrics + dashboard showing memory influence → `src/evaluation/` + `app/` | **Person D** | Scenario config + seed recording; stub UI/CLI that prints decision + memory refs |
+| **Eval + Frontend/Demo** | Baselines A/B/C, metrics **and the UI** (live sim, portfolios, “which memories fired”) → `src/evaluation/` + `app/` | **Person D** | Scenario/seed recording + stub dashboard or CLI that shows decision + memory refs |
+
+**Yes — frontend is Person D.** “Demo” means the observability UI (`app/`), not a separate fifth owner.
 
 Replace Person B/C/D with real names in standup. Stay in your `src/` lane.
 
