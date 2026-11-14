@@ -1,0 +1,96 @@
+{
+  "seed": 42,
+  "agentId": "demo-agent",
+  "chaosPlan": [{ "preset": "chip_export_ban", "tick": 1 }],
+  "frames": [
+    {
+      "phase": "learn",
+      "tick": 0,
+      "headline": "Seeded semantic lesson into memory",
+      "prices": { "SEMI": 100, "TECH": 100 },
+      "events": [],
+      "memoriesFired": [
+        {
+          "id": "lesson-semi-momentum",
+          "content": "In bull regimes, buy SEMI on positive AI demand — momentum in semiconductors paid off.",
+          "retrievalScore": 1,
+          "status": "active"
+        }
+      ]
+    },
+    {
+      "phase": "act_with_memory",
+      "tick": 0,
+      "headline": "Decision cites retrieved memory",
+      "prices": { "SEMI": 100, "TECH": 100 },
+      "events": [],
+      "decision": {
+        "reasoning": "Retrieved bull/SEMI momentum lesson — buying SEMI.",
+        "strategy": "momentum",
+        "confidence": 0.7,
+        "memoryReferences": ["lesson-semi-momentum"],
+        "orders": [{ "symbol": "SEMI", "side": "buy", "quantity": 5 }]
+      },
+      "memoriesFired": [
+        {
+          "id": "lesson-semi-momentum",
+          "content": "In bull regimes, buy SEMI on positive AI demand — momentum in semiconductors paid off.",
+          "retrievalScore": 0.91,
+          "status": "active"
+        }
+      ],
+      "portfolio": {
+        "cash": 9500,
+        "positions": [{ "symbol": "SEMI", "quantity": 5 }]
+      }
+    },
+    {
+      "phase": "shock",
+      "tick": 1,
+      "headline": "Government restricts chip exports",
+      "prices": { "SEMI": 97, "TECH": 99 },
+      "events": [
+        {
+          "id": "chip_export_ban-t1",
+          "type": "chip_export_ban",
+          "headline": "Government restricts chip exports"
+        }
+      ],
+      "memoriesFired": []
+    },
+    {
+      "phase": "govern",
+      "tick": 1,
+      "headline": "Invalidated stale bull/SEMI lesson after regime-mismatch shock",
+      "prices": { "SEMI": 97, "TECH": 99 },
+      "events": [],
+      "memoriesFired": [
+        {
+          "id": "lesson-semi-momentum",
+          "content": "In bull regimes, buy SEMI on positive AI demand — momentum in semiconductors paid off.",
+          "retrievalScore": 0,
+          "status": "invalidated"
+        }
+      ]
+    },
+    {
+      "phase": "act_after_govern",
+      "tick": 1,
+      "headline": "Post-governance decision — stale lesson must not fire",
+      "prices": { "SEMI": 97, "TECH": 99 },
+      "events": [],
+      "decision": {
+        "reasoning": "No active lessons retrieved — holding.",
+        "strategy": "conservative",
+        "confidence": 0.4,
+        "memoryReferences": [],
+        "orders": []
+      },
+      "memoriesFired": [],
+      "portfolio": {
+        "cash": 9500,
+        "positions": [{ "symbol": "SEMI", "quantity": 5 }]
+      }
+    }
+  ]
+}

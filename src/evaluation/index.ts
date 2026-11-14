@@ -16,3 +16,12 @@ export {
   type Decision,
   type DecisionSource,
 } from "./types.js";
+export {
+  DEMO_FRAME_PHASES,
+  demoFrameSchema,
+  demoResultSchema,
+  type DemoFrame,
+  type DemoFramePhase,
+  type DemoResult,
+} from "./demo-frame.js";
+export { runMemoryDemo, type RunMemoryDemoInput } from "./run-memory-demo.js";
